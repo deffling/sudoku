@@ -98,6 +98,19 @@ code { font-family: var(--mono); }
 .btn-danger { color: var(--error); }
 .btn-sm { min-height: var(--control-h-sm); padding: 0 var(--s3); font-size: 0.86rem; }
 .btn-sm.btn-icon { width: var(--control-h-sm); padding: 0; }
+.btn-erase {
+  position: relative; overflow: hidden; isolation: isolate;
+  --erase-progress: 0%;
+  background: rgba(220, 53, 69, 0.08);
+}
+.btn-erase::before {
+  content: ""; position: absolute; inset: 0 auto 0 0; width: var(--erase-progress);
+  background: rgba(220, 53, 69, 0.28);
+  z-index: 0;
+  transition: width 80ms linear;
+}
+.btn-erase > * { position: relative; z-index: 1; }
+.btn-erase.is-holding { border-color: var(--error); box-shadow: inset 0 0 0 1px rgba(220, 53, 69, 0.2); }
 /* Hover only where there is a mouse: a tap would leave it stuck on. */
 @media (hover: hover) and (pointer: fine) {
   .btn:hover:not(:disabled) { border-color: var(--ink); background-color: var(--surface-2); }
@@ -243,6 +256,7 @@ body:has(.sdk[open]) { overflow: hidden; }
   const TAPS_TO_OPEN = 5;
   const TAP_GAP_MS = 800;          // taps further apart start the count again
   const CONFIRM_MS = 3000;         // how long "Tap again to start over" waits
+  const ERASE_HOLD_MS = 2000;      // hold the erase button for 2s before deleting a value
   // Search steps allowed per uniqueness check. Running out keeps that clue,
   // so a puzzle never ships unless its single solution was proven.
   const SOLVER_BUDGET = 20000;
@@ -263,6 +277,9 @@ body:has(.sdk[open]) { overflow: hidden; }
   let wrong = new Set();    // shown after Check, until the next move
   let busy = false;
   let confirmTimer = 0;
+  let eraseHoldFrame = 0;
+  let eraseHoldStart = 0;
+  let eraseHoldBtn = null;
 
   // ── Puzzle generation ──
 
@@ -861,6 +878,36 @@ body:has(.sdk[open]) { overflow: hidden; }
     delete newBtn.dataset.confirm;
   }
 
+  function cancelEraseHold() {
+    if (eraseHoldFrame) cancelAnimationFrame(eraseHoldFrame);
+    eraseHoldFrame = 0;
+    if (eraseHoldBtn) {
+      eraseHoldBtn.style.setProperty('--erase-progress', '0%');
+      eraseHoldBtn.classList.remove('is-holding');
+      eraseHoldBtn = null;
+    }
+  }
+
+  function startEraseHold(button) {
+    if (!button || !game) return;
+    cancelEraseHold();
+    eraseHoldBtn = button;
+    eraseHoldStart = performance.now();
+    eraseHoldBtn.classList.add('is-holding');
+    const tick = () => {
+      const elapsed = performance.now() - eraseHoldStart;
+      const progress = Math.min(100, (elapsed / ERASE_HOLD_MS) * 100);
+      eraseHoldBtn.style.setProperty('--erase-progress', `${progress}%`);
+      if (progress >= 100) {
+        cancelEraseHold();
+        erase();
+        return;
+      }
+      eraseHoldFrame = requestAnimationFrame(tick);
+    };
+    eraseHoldFrame = requestAnimationFrame(tick);
+  }
+
   // Unfinished work goes only on a second tap.
   function askNewGame() {
     if (!hasProgress() || newBtn.dataset.confirm) return newGame();
@@ -871,18 +918,31 @@ body:has(.sdk[open]) { overflow: hidden; }
 
   // ── Events ──
 
+  function onPointerHold(e) {
+    const t = e.target.closest('button');
+    if (!t || t.dataset.act !== 'erase') return;
+    if (e.type === 'pointerdown') {
+      e.preventDefault();
+      startEraseHold(t);
+      return;
+    }
+    if (e.type === 'pointerup' || e.type === 'pointercancel' || e.type === 'pointerleave') {
+      cancelEraseHold();
+    }
+  }
+
   function onClick(e) {
     const t = e.target.closest('button');
     if (!t) return;
     if (t.dataset.act === 'close') return dialog.close();
     if (t.dataset.act === 'sound') return setSound(!soundOn);
+    if (t.dataset.act === 'erase') return; // must be held for 2s before erasing
     if (!game) return;
     if (t.dataset.cell !== undefined) return select(Number(t.dataset.cell), true);
     if (t.dataset.sym !== undefined) return enter(Number(t.dataset.sym));
     const actions = {
       notes: () => setNotesMode(!notesMode),
       undo,
-      erase,
       check,
       new: askNewGame,
     };
@@ -936,7 +996,7 @@ body:has(.sdk[open]) { overflow: hidden; }
         <div class="sdk-tools">
           <button type="button" class="btn btn-sm" data-act="notes" aria-pressed="false">Notes</button>
           <button type="button" class="btn btn-sm" data-act="undo">Undo</button>
-          <button type="button" class="btn btn-sm" data-act="erase">Erase</button>
+          <button type="button" class="btn btn-sm btn-erase" data-act="erase"><span>Erase</span></button>
           <button type="button" class="btn btn-sm" data-act="check">Check</button>
           <button type="button" class="btn btn-sm" data-act="new">New game</button>
         </div>
@@ -948,8 +1008,13 @@ body:has(.sdk[open]) { overflow: hidden; }
     notesBtn = dialog.querySelector('[data-act="notes"]');
     newBtn = dialog.querySelector('[data-act="new"]');
     soundBtn = dialog.querySelector('[data-act="sound"]');
+    const eraseBtn = dialog.querySelector('[data-act="erase"]');
     if (STANDALONE) dialog.querySelector('[data-act="close"]').remove();
     setSound(soundOn);
+    eraseBtn.addEventListener('pointerdown', onPointerHold);
+    eraseBtn.addEventListener('pointerup', onPointerHold);
+    eraseBtn.addEventListener('pointercancel', onPointerHold);
+    eraseBtn.addEventListener('pointerleave', onPointerHold);
     dialog.addEventListener('click', onClick);
     board.addEventListener('keydown', onBoardKey);
     dialog.addEventListener('close', () => window.removeEventListener('resize', sizeBoard));
