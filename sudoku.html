@@ -235,9 +235,15 @@ body:has(.sdk[open]) { overflow: hidden; }
 
 @media (max-width: 767px) {
   .sdk {
-    width: 100vw; height: 100dvh; max-height: 100dvh; margin: 0;
-    border-radius: 0; padding: var(--s4);
+    width: 100vw; height: auto; min-height: 100dvh; max-height: none; margin: 0;
+    border-radius: 0; padding: var(--s3) var(--s3) var(--s2);
   }
+  .sdk[open] { gap: var(--s2); }
+  .sdk-head { gap: var(--s2); }
+  .sdk-head h2 { font-size: 1rem; }
+  .sdk-play { gap: var(--s2); }
+  .sdk-board { margin-top: 0; }
+  .sdk-footer { padding-top: var(--s1); }
 }
 @media (pointer: coarse) {
   .sdk .btn { min-height: 44px; }
