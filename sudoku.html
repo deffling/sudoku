@@ -495,6 +495,8 @@ body:has(.sdk[open]) { overflow: hidden; }
     erase:  [[392, 0, 0.07, 'triangle', 0.7]],
     clash:  [[196, 0, 0.16, 'square', 0.35], [185, 0.05, 0.16, 'square', 0.35]],
     unit:   [[523, 0, 0.12, 'sine'], [659, 0.07, 0.12, 'sine'], [784, 0.14, 0.2, 'sine']],
+    check:  [[523, 0, 0.16, 'sine', 0.9], [659, 0.09, 0.16, 'sine', 0.9], [784, 0.18, 0.20, 'triangle', 0.9],
+             [1047, 0.34, 0.36, 'sine', 0.8], [784, 0.52, 0.36, 'triangle', 0.7]],
     solved: [[523, 0, 0.15, 'sine'], [659, 0.1, 0.15, 'sine'], [784, 0.2, 0.15, 'sine'],
              [1047, 0.3, 0.5, 'sine'], [784, 0.3, 0.5, 'triangle', 0.4]],
     start:  [[440, 0, 0.08, 'sine', 0.6], [587, 0.06, 0.12, 'sine', 0.6]],
@@ -687,7 +689,12 @@ body:has(.sdk[open]) { overflow: hidden; }
       .filter(i => i >= 0));
     renderBoard();
     if (isSolved()) return;
-    setStatus(wrong.size ? `${wrong.size} wrong, shown in red.` : 'No mistakes so far.');
+    if (wrong.size) {
+      setStatus(`${wrong.size} wrong, shown in red.`);
+      return play('clash');
+    }
+    setStatus('No mistakes so far.');
+    play('check');
   }
 
   // ── Starting ──
