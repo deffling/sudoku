@@ -349,6 +349,7 @@ body:has(.sdk[open]) { overflow: hidden; }
   let eraseHoldStart = 0;
   let eraseHoldBtn = null;
   let guideMode = false;
+  let guideTimer = 0;
   let currentLang = storeGet('lang') || 'en';
 
   function t(key, params = {}) {
@@ -982,8 +983,31 @@ body:has(.sdk[open]) { overflow: hidden; }
     return [marks];
   }
 
+  function clearGuideTimer() {
+    if (guideTimer) {
+      clearTimeout(guideTimer);
+      guideTimer = 0;
+    }
+  }
+
+  function scheduleGuideHint() {
+    clearGuideTimer();
+    if (!guideMode) return;
+    guideTimer = setTimeout(() => {
+      guideTimer = 0;
+      if (!guideMode) return;
+      const hint = findNextHint(true);
+      if (!hint) return;
+      selected = hint.index;
+      renderBoard();
+      cells[hint.index]?.focus();
+      scheduleGuideHint();
+    }, 10000);
+  }
+
   function setGuideMode(on) {
     guideMode = on;
+    clearGuideTimer();
     if (guideBtn) {
       guideBtn.setAttribute('aria-pressed', String(on));
       guideBtn.classList.toggle('is-on', on);
@@ -995,13 +1019,14 @@ body:has(.sdk[open]) { overflow: hidden; }
         selected = hint.index;
         renderBoard();
         cells[hint.index]?.focus();
+        scheduleGuideHint();
       }
     } else if (selected >= 0 && game && !game.puzzle[selected]) {
       setStatus('');
     }
   }
 
-  function findNextHint() {
+  function findNextHint(skipSelected = false) {
     if (!game || isSolved()) return null;
 
     const wrongNow = [...wrong];
@@ -1018,7 +1043,10 @@ body:has(.sdk[open]) { overflow: hidden; }
     const open = range(game.values.length).filter(i => game.values[i] < 0 && game.puzzle[i] < 0);
     if (!open.length) return null;
 
-    const scored = open
+    const candidates = skipSelected ? open.filter(i => i !== selected) : open;
+    const source = candidates.length ? candidates : open;
+
+    const scored = source
       .map(i => {
         const peers = geo.peers[i];
         const filledPeers = peers.filter(j => game.values[j] >= 0 || game.puzzle[j] >= 0).length;
