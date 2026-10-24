@@ -202,6 +202,11 @@ body:has(.sdk[open]) { overflow: hidden; }
 .sdk-notes span { display: flex; align-items: center; justify-content: center; }
 .sdk-status { margin: 0; min-height: 1.45em; text-align: center; font-weight: 600; }
 .sdk-status.sdk-solved { color: var(--green-text); }
+.sdk-footer {
+  width: 100%; margin-top: var(--s1); padding-top: var(--s2);
+  border-top: 1px solid var(--line-strong); color: var(--muted);
+  font-size: 0.72rem; letter-spacing: 0.04em; text-align: center;
+}
 .sdk-pad { display: grid; grid-template-columns: repeat(var(--pad-cols), minmax(0, 1fr)); gap: var(--s1); }
 .sdk-key { padding: 0; font-size: 1.05rem; }
 
@@ -257,6 +262,7 @@ body:has(.sdk[open]) { overflow: hidden; }
   const TAP_GAP_MS = 800;          // taps further apart start the count again
   const CONFIRM_MS = 3000;         // how long "Tap again to start over" waits
   const ERASE_HOLD_MS = 2000;      // hold the erase button for 2s before deleting a value
+  const BUILD_ID = '72c4d7c';      // short commit hash for the current build
   // Search steps allowed per uniqueness check. Running out keeps that clue,
   // so a puzzle never ships unless its single solution was proven.
   const SOLVER_BUDGET = 20000;
@@ -1000,6 +1006,7 @@ body:has(.sdk[open]) { overflow: hidden; }
           <button type="button" class="btn btn-sm" data-act="check">Check</button>
           <button type="button" class="btn btn-sm" data-act="new">New game</button>
         </div>
+        <footer class="sdk-footer">Build: <span data-build-id>${BUILD_ID}</span></footer>
       </div>`;
     document.body.appendChild(dialog);
     board = dialog.querySelector('.sdk-board');
