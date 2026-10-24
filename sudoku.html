@@ -389,6 +389,8 @@ body:has(.sdk[open]) { overflow: hidden; }
   let eraseHoldStart = 0;
   let eraseHoldBtn = null;
   let eraseHoldTriggered = false;
+  let suppressEraseClick = false;
+  let suppressEraseClickTimer = 0;
   let guideMode = false;
   let guideHintTimer = 0;
   let hintVisual = null;
@@ -1317,9 +1319,21 @@ body:has(.sdk[open]) { overflow: hidden; }
     }
   }
 
+  function suppressNextEraseClick() {
+    suppressEraseClick = true;
+    clearTimeout(suppressEraseClickTimer);
+    suppressEraseClickTimer = setTimeout(() => {
+      suppressEraseClick = false;
+      suppressEraseClickTimer = 0;
+    }, 1000);
+  }
+
   function startEraseHold(button, pointerId) {
     if (!button || !game) return;
     cancelEraseHold();
+    suppressEraseClick = false;
+    clearTimeout(suppressEraseClickTimer);
+    suppressEraseClickTimer = 0;
     eraseHoldTriggered = false;
     eraseHoldBtn = button;
     eraseHoldStart = performance.now();
@@ -1336,6 +1350,7 @@ body:has(.sdk[open]) { overflow: hidden; }
       if (progress >= 100) {
         const completedBtn = eraseHoldBtn;
         eraseHoldTriggered = true;
+        suppressNextEraseClick();
         cancelEraseHold();
         erase();
         if (completedBtn && completedBtn.isConnected) {
@@ -1363,20 +1378,18 @@ body:has(.sdk[open]) { overflow: hidden; }
     const t = e.target.closest('button');
     if (!t || t.dataset.act !== 'erase') return;
     if (e.type === 'pointerdown') {
-      e.preventDefault();
       startEraseHold(t, e.pointerId);
       return;
     }
     if (e.type === 'pointerup') {
       const wasHolding = eraseHoldBtn === t;
       const heldLongEnough = wasHolding && performance.now() - eraseHoldStart >= ERASE_HOLD_MS;
-      const eraseOne = wasHolding && !eraseHoldTriggered && !heldLongEnough;
       if (heldLongEnough && !eraseHoldTriggered) {
         eraseHoldTriggered = true;
+        suppressNextEraseClick();
         erase();
       }
       cancelEraseHold();
-      if (eraseOne) eraseSelected();
       eraseHoldTriggered = false;
       if (e.pointerId !== undefined && t.releasePointerCapture) {
         try { t.releasePointerCapture(e.pointerId); } catch {}
@@ -1386,6 +1399,11 @@ body:has(.sdk[open]) { overflow: hidden; }
     if (e.type === 'pointercancel' || e.type === 'pointerleave') {
       cancelEraseHold();
       eraseHoldTriggered = false;
+      if (e.type === 'pointercancel') {
+        suppressEraseClick = false;
+        clearTimeout(suppressEraseClickTimer);
+        suppressEraseClickTimer = 0;
+      }
       if (e.pointerId !== undefined && t.releasePointerCapture) {
         try { t.releasePointerCapture(e.pointerId); } catch {}
       }
@@ -1397,7 +1415,15 @@ body:has(.sdk[open]) { overflow: hidden; }
     if (!t) return;
     if (t.dataset.act === 'close') return dialog.close();
     if (t.dataset.act === 'sound') return setSound(!soundOn);
-    if (t.dataset.act === 'erase') return; // Pointer handlers distinguish a tap from a hold.
+    if (t.dataset.act === 'erase') {
+      if (suppressEraseClick) {
+        suppressEraseClick = false;
+        clearTimeout(suppressEraseClickTimer);
+        suppressEraseClickTimer = 0;
+        return;
+      }
+      return eraseSelected();
+    }
     if (!game) return;
     if (t.dataset.cell !== undefined) return select(Number(t.dataset.cell), true);
     if (t.dataset.sym !== undefined) return enter(Number(t.dataset.sym));
