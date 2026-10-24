@@ -131,7 +131,10 @@ body:has(.sdk[open]) { overflow: hidden; }
   display: grid; grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: var(--s2); width: min(100%, 560px); justify-self: stretch;
 }
-.sdk-tools .btn { width: 100%; justify-content: center; }
+.sdk-tools .btn {
+  width: 100%; justify-content: center; white-space: normal; text-align: center;
+  line-height: 1.2; overflow-wrap: anywhere;
+}
 .sdk .btn:not(.btn-ghost)[aria-pressed="true"] { background: var(--green); border-color: var(--ink); color: var(--ink); }
 .sound-toggle {
   appearance: none; border: none; background: transparent; padding: 0; display: inline-flex;
@@ -862,7 +865,7 @@ body:has(.sdk[open]) { overflow: hidden; }
   function askNewGame() {
     if (!hasProgress() || newBtn.dataset.confirm) return newGame();
     newBtn.dataset.confirm = '1';
-    newBtn.textContent = 'Tap again to start over';
+    newBtn.textContent = 'Start over';
     confirmTimer = setTimeout(resetConfirm, CONFIRM_MS);
   }
 
