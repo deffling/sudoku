@@ -249,15 +249,15 @@ body:has(.sdk[open]) { overflow: hidden; }
 
 @media (max-width: 767px) {
   .sdk {
-    width: 100vw; height: auto; min-height: 100dvh; max-height: none; margin: 0;
+    width: 100vw; height: 100dvh; min-height: 100dvh; max-height: none; margin: 0;
     border-radius: 0; padding: var(--s3) var(--s3) 0;
   }
   .sdk[open] { gap: var(--s2); }
   .sdk-head { gap: var(--s2); }
   .sdk-head h2 { font-size: 1rem; }
-  .sdk-play { gap: var(--s2); }
+  .sdk-play { flex: 1; width: 100%; display: flex; flex-direction: column; gap: var(--s2); }
   .sdk-board { margin-top: var(--s1); }
-  .sdk-footer { padding-top: var(--s1); }
+  .sdk-footer { margin-top: auto; padding-top: var(--s1); }
 }
 @media (pointer: coarse) {
   .sdk .btn { min-height: 44px; }
@@ -311,6 +311,7 @@ body:has(.sdk[open]) { overflow: hidden; }
       noMistakes: 'No mistakes so far.',
       wrong: '{n} wrong, shown in red.',
       hint: 'Hint: try {value} in row {row}, column {col}.',
+      noHint: 'No direct deduction is available yet.',
       makingPuzzle: 'Making a puzzle…',
       language: 'Language',
       languageName: 'English',
@@ -333,6 +334,7 @@ body:has(.sdk[open]) { overflow: hidden; }
       noMistakes: '目前还没有错误。',
       wrong: '{n} 处错误，已标红。',
       hint: '提示：在第 {row} 行，第 {col} 列试 {value}。',
+      noHint: '目前还没有可以直接推导的数字。',
       makingPuzzle: '正在生成题目…',
       language: '语言',
       languageName: '简体中文',
@@ -674,7 +676,11 @@ body:has(.sdk[open]) { overflow: hidden; }
   let soundOn = storeGet('sound') !== 'off';
   let ambientLoop = null;
   let ambientNodes = [];
-  const SOUND_GAIN = 0.07;   // quiet: this may be played at a desk
+  let ambientBus = null;
+  let ambientDuckUntil = 0;
+  const SOUND_GAIN = 0.14;
+  const AMBIENT_GAIN = 0.2;
+  const AMBIENT_DUCK_GAIN = 0.25;
   const SOUNDS = {
     place:  [[660, 0, 0.09, 'triangle']],
     note:   [[990, 0, 0.05, 'sine', 0.5]],
@@ -696,6 +702,10 @@ body:has(.sdk[open]) { overflow: hidden; }
       if (audio.state === 'suspended') audio.resume();
     } catch {
       return;
+    }
+    if (!ambientBus) {
+      ambientBus = audio.createGain();
+      ambientBus.connect(audio.destination);
     }
     const phrase = [
       [261.63, 0.00, 4.00, 'sine', 0.12],
@@ -739,9 +749,9 @@ body:has(.sdk[open]) { overflow: hidden; }
       osc.type = type;
       osc.frequency.value = freq;
       amp.gain.setValueAtTime(0.0001, now + start);
-      amp.gain.exponentialRampToValueAtTime(SOUND_GAIN * volume * 0.825, now + start + 0.38);
+      amp.gain.exponentialRampToValueAtTime(AMBIENT_GAIN * volume * 0.825, now + start + 0.38);
       amp.gain.exponentialRampToValueAtTime(0.0001, now + start + length);
-      osc.connect(amp).connect(audio.destination);
+      osc.connect(amp).connect(ambientBus);
       osc.start(now + start);
       osc.stop(now + start + length + 0.45);
       ambientNodes.push({ osc, amp });
@@ -793,7 +803,17 @@ body:has(.sdk[open]) { overflow: hidden; }
       return;   // no Web Audio: silent
     }
     const now = audio.currentTime;
-    for (const [freq, start, length, type, volume = 1] of SOUNDS[name]) {
+    const tones = SOUNDS[name];
+    if (ambientBus) {
+      const end = Math.max(...tones.map(([, start, length]) => now + start + length)) + 0.08;
+      ambientDuckUntil = Math.max(ambientDuckUntil, end);
+      ambientBus.gain.cancelScheduledValues(now);
+      ambientBus.gain.setValueAtTime(ambientBus.gain.value, now);
+      ambientBus.gain.linearRampToValueAtTime(AMBIENT_DUCK_GAIN, now + 0.03);
+      ambientBus.gain.setValueAtTime(AMBIENT_DUCK_GAIN, ambientDuckUntil);
+      ambientBus.gain.linearRampToValueAtTime(1, ambientDuckUntil + 0.25);
+    }
+    for (const [freq, start, length, type, volume = 1] of tones) {
       const osc = audio.createOscillator();
       const amp = audio.createGain();
       osc.type = type;
@@ -980,7 +1000,7 @@ body:has(.sdk[open]) { overflow: hidden; }
     // the dialog is full height, so its own height says nothing.
     const style = getComputedStyle(dialog);
     const top = dialog.firstElementChild.getBoundingClientRect().top;
-    const bottom = dialog.lastElementChild.getBoundingClientRect().bottom;
+    const bottom = dialog.querySelector('.sdk-tools').getBoundingClientRect().bottom;
     const others = bottom - top + parseFloat(style.paddingTop) + parseFloat(style.paddingBottom) - board.offsetHeight;
     const height = window.innerHeight - DIALOG_MARGIN_PX - others - BOARD_BORDER_PX;
     const cell = Math.floor(Math.min(contentWidth() / geo.n, height / geo.n, MAX_CELL_PX));
@@ -1076,49 +1096,99 @@ body:has(.sdk[open]) { overflow: hidden; }
   }
 
   function findNextHint(skipSelected = false) {
-    if (!game || isSolved()) return null;
-
-    const wrongNow = [...wrong];
-    if (wrongNow.length) {
-      const preferred = wrongNow[0];
-      const value = SYMBOLS[game.solution[preferred]];
-      const row = geo.row[preferred] + 1;
-      const col = geo.col[preferred] + 1;
-      setStatus(t('hint', { value, row, col }));
-      setGuideKeyHighlight(value);
-      animate(cells[preferred], 'sdk-flash', 0);
-      return { index: preferred, value, row, col };
-    }
+    if (!game || isSolved() || wrong.size) return null;
 
     const open = range(game.values.length).filter(i => game.values[i] < 0 && game.puzzle[i] < 0);
-    if (!open.length) return null;
-
-    const boxCounts = new Map();
-    for (const i of open) {
-      const box = geo.box[i];
-      boxCounts.set(box, (boxCounts.get(box) ?? 0) + 1);
+    if (!open.length) {
+      setStatus(t('noHint'));
+      return null;
     }
-    const valid = open.filter(i => (boxCounts.get(geo.box[i]) ?? 0) > 1);
-    const candidates = skipSelected ? valid.filter(i => i !== selected) : valid;
-    const source = candidates.length ? candidates : valid;
-    if (!source.length) return null;
 
-    const scored = source
-      .map(i => {
-        const peers = geo.peers[i];
-        const filledPeers = peers.filter(j => game.values[j] >= 0 || game.puzzle[j] >= 0).length;
-        const localBox = geo.box[i];
-        const boxFilled = range(game.values.length).filter(j => geo.box[j] === localBox && (game.values[j] >= 0 || game.puzzle[j] >= 0)).length;
-        return { i, score: filledPeers + boxFilled, selected: i === selected };
-      })
-      .sort((a, b) => {
-        if (b.score !== a.score) return b.score - a.score;
-        if (a.selected !== b.selected) return Number(b.selected) - Number(a.selected);
-        return a.i - b.i;
-      });
+    for (let i = 0; i < game.values.length; i++) {
+      const value = game.values[i];
+      if (value >= 0 && geo.peers[i].some(j => j < i && game.values[j] === value)) {
+        setStatus(t('noHint'));
+        return null;
+      }
+    }
 
-    const preferred = scored[0].i;
-    const value = SYMBOLS[game.solution[preferred]];
+    const n = geo.n;
+    const all = (1 << n) - 1;
+    const options = new Array(game.values.length).fill(0);
+    for (const i of open) {
+      let used = 0;
+      for (const j of geo.peers[i]) {
+        if (game.values[j] >= 0) used |= 1 << game.values[j];
+      }
+      options[i] = all & ~used;
+      if (!options[i]) {
+        setStatus(t('noHint'));
+        return null;
+      }
+    }
+
+    const units = [];
+    for (let r = 0; r < n; r++) {
+      units.push({ cells: range(n * n).filter(i => geo.row[i] === r), type: 0 });
+    }
+    for (let c = 0; c < n; c++) {
+      units.push({ cells: range(n * n).filter(i => geo.col[i] === c), type: 1 });
+    }
+    for (let b = 0; b < n; b++) {
+      units.push({ cells: range(n * n).filter(i => geo.box[i] === b), type: 2 });
+    }
+
+    const deductions = new Map();
+    const addDeduction = (i, value, score, type) => {
+      const current = deductions.get(i);
+      if (!current || score > current.score || (score === current.score && type < current.type)) {
+        deductions.set(i, { i, value, score, type, selected: i === selected });
+      }
+    };
+
+    for (const i of open) {
+      if ((options[i] & (options[i] - 1)) === 0) {
+        const value = Math.log2(options[i]);
+        const bestUnit = units
+          .filter(unit => unit.cells.includes(i))
+          .map(unit => ({
+            score: unit.cells.length - unit.cells.filter(j => game.values[j] < 0).length,
+            type: unit.type,
+          }))
+          .sort((a, b) => b.score - a.score || a.type - b.type)[0];
+        addDeduction(i, value, bestUnit.score, bestUnit.type);
+      }
+    }
+
+    for (const unit of units) {
+      const filled = unit.cells.filter(i => game.values[i] >= 0).length;
+      for (let value = 0; value < n; value++) {
+        if (unit.cells.some(i => game.values[i] === value)) continue;
+        const locations = unit.cells.filter(i => game.values[i] < 0 && (options[i] & (1 << value)));
+        if (!locations.length) {
+          setStatus(t('noHint'));
+          return null;
+        }
+        if (locations.length === 1) addDeduction(locations[0], value, filled, unit.type);
+      }
+    }
+
+    const inferred = [...deductions.values()];
+    const candidates = skipSelected ? inferred.filter(hint => hint.i !== selected) : inferred;
+    const source = candidates.length ? candidates : inferred;
+    if (!source.length) {
+      setStatus(t('noHint'));
+      return null;
+    }
+    source.sort((a, b) =>
+      b.score - a.score ||
+      Number(b.selected) - Number(a.selected) ||
+      a.type - b.type ||
+      a.i - b.i
+    );
+
+    const preferred = source[0].i;
+    const value = SYMBOLS[source[0].value];
     const row = geo.row[preferred] + 1;
     const col = geo.col[preferred] + 1;
     setStatus(t('hint', { value, row, col }));
