@@ -388,6 +388,7 @@ body:has(.sdk[open]) { overflow: hidden; }
   let eraseHoldFrame = 0;
   let eraseHoldStart = 0;
   let eraseHoldBtn = null;
+  let eraseHoldTriggered = false;
   let guideMode = false;
   let guideHintTimer = 0;
   let hintVisual = null;
@@ -691,6 +692,16 @@ body:has(.sdk[open]) { overflow: hidden; }
     if (!touched.length) return;
     history.push(touched);
     selected = touched[0].i;
+    afterMove();
+    play('erase');
+  }
+
+  function eraseSelected() {
+    if (!game || isSolved() || selected < 0 || game.puzzle[selected] >= 0) return;
+    if (game.values[selected] < 0 && !game.notes[selected]) return;
+    history.push(snapshot([selected]));
+    game.values[selected] = -1;
+    game.notes[selected] = 0;
     afterMove();
     play('erase');
   }
@@ -1309,6 +1320,7 @@ body:has(.sdk[open]) { overflow: hidden; }
   function startEraseHold(button, pointerId) {
     if (!button || !game) return;
     cancelEraseHold();
+    eraseHoldTriggered = false;
     eraseHoldBtn = button;
     eraseHoldStart = performance.now();
     eraseHoldBtn.classList.add('is-holding');
@@ -1323,6 +1335,7 @@ body:has(.sdk[open]) { overflow: hidden; }
       }
       if (progress >= 100) {
         const completedBtn = eraseHoldBtn;
+        eraseHoldTriggered = true;
         cancelEraseHold();
         erase();
         if (completedBtn && completedBtn.isConnected) {
@@ -1354,8 +1367,25 @@ body:has(.sdk[open]) { overflow: hidden; }
       startEraseHold(t, e.pointerId);
       return;
     }
-    if (e.type === 'pointerup' || e.type === 'pointercancel' || e.type === 'pointerleave') {
+    if (e.type === 'pointerup') {
+      const wasHolding = eraseHoldBtn === t;
+      const heldLongEnough = wasHolding && performance.now() - eraseHoldStart >= ERASE_HOLD_MS;
+      const eraseOne = wasHolding && !eraseHoldTriggered && !heldLongEnough;
+      if (heldLongEnough && !eraseHoldTriggered) {
+        eraseHoldTriggered = true;
+        erase();
+      }
       cancelEraseHold();
+      if (eraseOne) eraseSelected();
+      eraseHoldTriggered = false;
+      if (e.pointerId !== undefined && t.releasePointerCapture) {
+        try { t.releasePointerCapture(e.pointerId); } catch {}
+      }
+      return;
+    }
+    if (e.type === 'pointercancel' || e.type === 'pointerleave') {
+      cancelEraseHold();
+      eraseHoldTriggered = false;
       if (e.pointerId !== undefined && t.releasePointerCapture) {
         try { t.releasePointerCapture(e.pointerId); } catch {}
       }
@@ -1367,7 +1397,7 @@ body:has(.sdk[open]) { overflow: hidden; }
     if (!t) return;
     if (t.dataset.act === 'close') return dialog.close();
     if (t.dataset.act === 'sound') return setSound(!soundOn);
-    if (t.dataset.act === 'erase') return; // must be held for 2s before erasing
+    if (t.dataset.act === 'erase') return; // Pointer handlers distinguish a tap from a hold.
     if (!game) return;
     if (t.dataset.cell !== undefined) return select(Number(t.dataset.cell), true);
     if (t.dataset.sym !== undefined) return enter(Number(t.dataset.sym));
