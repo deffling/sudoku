@@ -13,3 +13,11 @@ local file does not support installation or offline caching.
 
 After the first online load, the game shell is cached for offline play. Saved
 games remain in the browser's local storage.
+
+## Publish to GitHub Pages
+
+Pushing to `main` builds and deploys the site with the triggering commit's
+short hash in the footer. The service-worker cache is versioned with the full
+commit hash, so each deployment installs the new app shell and removes older
+cached shells. In the repository settings, set **Pages → Build and deployment
+→ Source** to **GitHub Actions**.

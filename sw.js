@@ -1,4 +1,4 @@
-const CACHE_NAME = 'sudoku-shell-v1';
+const CACHE_NAME = 'sudoku-shell-@@BUILD_ID@@';
 const SHELL_ASSETS = [
   './',
   './sudoku.html',

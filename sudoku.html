@@ -306,7 +306,7 @@ body:has(.sdk[open]) { overflow: hidden; }
   const TAP_GAP_MS = 800;          // taps further apart start the count again
   const CONFIRM_MS = 3000;         // how long "Tap again to start over" waits
   const ERASE_HOLD_MS = 2000;      // hold the erase button for 2s before deleting a value
-  const BUILD_ID = '72c4d7c';      // short commit hash for the current build
+  const BUILD_ID = '@@BUILD_ID@@'.startsWith('@@') ? 'local' : '@@BUILD_ID@@'.slice(0, 7);
   const I18N = {
     en: {
       title: 'Sudoku',
