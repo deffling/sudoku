@@ -193,6 +193,7 @@ body:has(.sdk[open]) { overflow: hidden; }
   background: var(--surface); color: var(--green-text);
   font: inherit; font-size: calc(var(--cell) * 0.55); font-weight: 600; line-height: 1;
   cursor: pointer; touch-action: manipulation; -webkit-tap-highlight-color: transparent;
+  transition: background-color 180ms ease, color 180ms ease, box-shadow 180ms ease, transform 180ms ease;
 }
 .sdk-cell.sdk-box-r { border-right: 2px solid var(--ink); }
 .sdk-cell.sdk-box-b { border-bottom: 2px solid var(--ink); }
@@ -202,7 +203,13 @@ body:has(.sdk[open]) { overflow: hidden; }
 .sdk-cell.sdk-peer { background: var(--row-hover); }
 .sdk-cell.sdk-same { background: var(--green-tint); }
 .sdk-cell.sdk-conflict { background: var(--error-bg); color: var(--error); }
-.sdk-cell.sdk-selected { background: var(--green); color: var(--ink); }
+.sdk-cell.sdk-selected { background: var(--green); color: var(--ink); box-shadow: inset 0 0 0 2px rgba(24, 36, 26, 0.22); }
+.sdk-cell.sdk-focus-pulse { animation: sdk-focus-pulse 220ms ease-out; }
+@keyframes sdk-focus-pulse {
+  0%   { transform: translateY(0) scale(0.98); box-shadow: inset 0 0 0 2px rgba(24, 36, 26, 0.18); }
+  40%  { transform: translateY(-1px) scale(1.04); box-shadow: inset 0 0 0 3px rgba(24, 36, 26, 0.4); }
+  100% { transform: translateY(0) scale(1); box-shadow: inset 0 0 0 2px rgba(24, 36, 26, 0.22); }
+}
 .sdk-cell:focus-visible { outline: none; box-shadow: inset 0 0 0 2px var(--ink); }
 .sdk-notes {
   display: grid; grid-template-columns: repeat(var(--note-cols), 1fr); width: 100%; height: 100%;
@@ -811,6 +818,15 @@ body:has(.sdk[open]) { overflow: hidden; }
     el.addEventListener('animationend', () => el.classList.remove(cls), { once: true });
   }
 
+  function pulseSelectedCell() {
+    const active = cells[selected];
+    if (!active) return;
+    active.classList.remove('sdk-focus-pulse');
+    void active.offsetWidth;
+    requestAnimationFrame(() => active.classList.add('sdk-focus-pulse'));
+    active.addEventListener('animationend', () => active.classList.remove('sdk-focus-pulse'), { once: true });
+  }
+
   // Rows, columns and boxes through cell i that are now full with no clash.
   function completedUnits(i) {
     const { n, row, col, box } = geo;
@@ -997,6 +1013,7 @@ body:has(.sdk[open]) { overflow: hidden; }
       const content = v >= 0 ? SYMBOLS[v] : 'empty';
       el.setAttribute('aria-label', `Row ${row[i] + 1}, column ${col[i] + 1}: ${content}${given ? ', given' : ''}`);
     });
+    if (selected >= 0) pulseSelectedCell();
   }
 
   // A cell's number, or its notes laid out like a small box, or nothing.
@@ -1053,6 +1070,8 @@ body:has(.sdk[open]) { overflow: hidden; }
     if (hint) {
       selected = hint.index;
       renderBoard();
+      animate(cells[hint.index], 'sdk-focus-pulse');
+      animate(cells[hint.index], 'sdk-focus-pulse');
       cells[hint.index]?.focus();
       setGuideKeyHighlight(hint.value);
     }
@@ -1111,7 +1130,9 @@ body:has(.sdk[open]) { overflow: hidden; }
   function select(i, focus) {
     selected = i;
     renderBoard();
-    if (focus) cells[i].focus();
+    if (cells[i]) {
+      if (focus) cells[i].focus();
+    }
   }
 
   function setNotesMode(on) {
