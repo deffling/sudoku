@@ -1017,7 +1017,22 @@ body:has(.sdk[open]) { overflow: hidden; }
 
     const open = range(game.values.length).filter(i => game.values[i] < 0 && game.puzzle[i] < 0);
     if (!open.length) return null;
-    const preferred = open.find(i => i === selected) ?? open[0];
+
+    const scored = open
+      .map(i => {
+        const peers = geo.peers[i];
+        const filledPeers = peers.filter(j => game.values[j] >= 0 || game.puzzle[j] >= 0).length;
+        const localBox = geo.box[i];
+        const boxFilled = range(game.values.length).filter(j => geo.box[j] === localBox && (game.values[j] >= 0 || game.puzzle[j] >= 0)).length;
+        return { i, score: filledPeers + boxFilled, selected: i === selected };
+      })
+      .sort((a, b) => {
+        if (b.score !== a.score) return b.score - a.score;
+        if (a.selected !== b.selected) return Number(b.selected) - Number(a.selected);
+        return a.i - b.i;
+      });
+
+    const preferred = scored[0].i;
     const value = SYMBOLS[game.solution[preferred]];
     const row = geo.row[preferred] + 1;
     const col = geo.col[preferred] + 1;
