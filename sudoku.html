@@ -263,6 +263,48 @@ body:has(.sdk[open]) { overflow: hidden; }
   const CONFIRM_MS = 3000;         // how long "Tap again to start over" waits
   const ERASE_HOLD_MS = 2000;      // hold the erase button for 2s before deleting a value
   const BUILD_ID = '72c4d7c';      // short commit hash for the current build
+  const I18N = {
+    en: {
+      title: 'Sudoku',
+      sound: 'Sound',
+      soundOn: 'Sound on',
+      soundOff: 'Sound off',
+      close: 'Close',
+      notes: 'Notes',
+      undo: 'Undo',
+      erase: 'Erase',
+      check: 'Check',
+      newGame: 'New game',
+      startOver: 'Start over',
+      build: 'Build',
+      solved: 'Solved! Well done.',
+      noMistakes: 'No mistakes so far.',
+      wrong: '{n} wrong, shown in red.',
+      makingPuzzle: 'Making a puzzle…',
+      language: 'Language',
+      languageName: 'English',
+    },
+    zh: {
+      title: '数独',
+      sound: '声音',
+      soundOn: '声音已开',
+      soundOff: '声音已关',
+      close: '关闭',
+      notes: '笔记',
+      undo: '撤销',
+      erase: '清除',
+      check: '检查',
+      newGame: '新游戏',
+      startOver: '重新开始',
+      build: '构建',
+      solved: '已完成！很好。',
+      noMistakes: '目前还没有错误。',
+      wrong: '{n} 处错误，已标红。',
+      makingPuzzle: '正在生成题目…',
+      language: '语言',
+      languageName: '简体中文',
+    },
+  };
   // Search steps allowed per uniqueness check. Running out keeps that clue,
   // so a puzzle never ships unless its single solution was proven.
   const SOLVER_BUDGET = 20000;
@@ -272,7 +314,7 @@ body:has(.sdk[open]) { overflow: hidden; }
   // there the game is the whole page, open from the start, with no Close.
   const STANDALONE = document.documentElement.hasAttribute('data-sudoku-standalone');
 
-  let dialog, board, pad, statusEl, notesBtn, newBtn, soundBtn;
+  let dialog, board, pad, statusEl, notesBtn, newBtn, soundBtn, langSelect, buildLabel;
   let cells = [];
   const level = LEVEL;
   let geo = null;
@@ -286,6 +328,51 @@ body:has(.sdk[open]) { overflow: hidden; }
   let eraseHoldFrame = 0;
   let eraseHoldStart = 0;
   let eraseHoldBtn = null;
+  let currentLang = storeGet('lang') || 'en';
+
+  function t(key, params = {}) {
+    const dict = I18N[currentLang] || I18N.en;
+    const value = dict[key] || I18N.en[key] || key;
+    return String(value).replace(/\{(\w+)\}/g, (_, name) => params[name] ?? `{${name}}`);
+  }
+
+  function setLanguage(lang) {
+    currentLang = lang in I18N ? lang : 'en';
+    storeSet('lang', currentLang);
+    document.documentElement.lang = currentLang === 'zh' ? 'zh-CN' : 'en-SG';
+    if (!dialog) return;
+    if (langSelect) langSelect.value = currentLang;
+    const title = dialog.querySelector('#sdkTitle');
+    if (title) title.textContent = t('title');
+    const closeBtn = dialog.querySelector('[data-act="close"]');
+    if (closeBtn) closeBtn.textContent = t('close');
+    const soundLabel = dialog.querySelector('[data-act="sound"] > span');
+    if (soundLabel) soundLabel.textContent = t('sound');
+    if (soundBtn) {
+      soundBtn.setAttribute('aria-label', soundOn ? t('soundOn') : t('soundOff'));
+      soundBtn.setAttribute('aria-pressed', String(soundOn));
+    }
+    const eraseBtn = dialog.querySelector('[data-act="erase"] > span');
+    if (eraseBtn) eraseBtn.textContent = t('erase');
+    if (notesBtn) notesBtn.textContent = t('notes');
+    if (newBtn) newBtn.textContent = newBtn.dataset.confirm ? t('startOver') : t('newGame');
+    const undoBtn = dialog.querySelector('[data-act="undo"]');
+    if (undoBtn) undoBtn.textContent = t('undo');
+    const checkBtn = dialog.querySelector('[data-act="check"]');
+    if (checkBtn) checkBtn.textContent = t('check');
+    if (buildLabel) buildLabel.textContent = t('build');
+    if (statusEl && statusEl.textContent) {
+      const current = statusEl.textContent;
+      if (current === 'Solved! Well done.' || current === '已完成！很好。') setStatus(t('solved'), true);
+      else if (current === 'No mistakes so far.' || current === '目前还没有错误。') setStatus(t('noMistakes'));
+      else if (/\d+ wrong, shown in red\./.test(current) || /\d+ 处错误，已标红\./.test(current)) {
+        const n = (current.match(/\d+/) || ['0'])[0];
+        setStatus(t('wrong', { n }));
+      }
+    }
+    const langLabel = dialog.querySelector('.lang-label');
+    if (langLabel) langLabel.textContent = t('language');
+  }
 
   // ── Puzzle generation ──
 
@@ -465,7 +552,7 @@ body:has(.sdk[open]) { overflow: hidden; }
     renderBoard();
     if (isSolved()) {
       storeRemove(level.id);
-      setStatus('Solved! Well done.', true);
+      setStatus(t('solved'), true);
     } else {
       setStatus('');
     }
@@ -616,7 +703,7 @@ body:has(.sdk[open]) { overflow: hidden; }
     soundOn = on;
     storeSet('sound', on ? 'on' : 'off');
     soundBtn.setAttribute('aria-pressed', String(on));
-    soundBtn.setAttribute('aria-label', `Sound ${on ? 'on' : 'off'}`);
+    soundBtn.setAttribute('aria-label', on ? t('soundOn') : t('soundOff'));
     soundBtn.classList.toggle('is-on', on);
     if (on) startAmbientLoop();
     else stopAmbientLoop();
@@ -716,10 +803,10 @@ body:has(.sdk[open]) { overflow: hidden; }
     renderBoard();
     if (isSolved()) return;
     if (wrong.size) {
-      setStatus(`${wrong.size} wrong, shown in red.`);
+      setStatus(t('wrong', { n: wrong.size }));
       return play('clash');
     }
-    setStatus('No mistakes so far.');
+    setStatus(t('noMistakes'));
     play('check');
   }
 
@@ -742,7 +829,7 @@ body:has(.sdk[open]) { overflow: hidden; }
     if (busy) return;
     busy = true;
     resetConfirm();
-    setStatus('Making a puzzle…');
+    setStatus(t('makingPuzzle'));
     // Let the message paint first: proving the puzzle unique takes a moment.
     setTimeout(() => {
       try {
@@ -766,7 +853,7 @@ body:has(.sdk[open]) { overflow: hidden; }
     sizeBoard();
     renderBoard();
     cells[selected].focus();
-    setStatus(isSolved() ? 'Solved! Well done.' : '', isSolved());
+    setStatus(isSolved() ? t('solved') : '', isSolved());
   }
 
   // ── Rendering ──
@@ -880,7 +967,7 @@ body:has(.sdk[open]) { overflow: hidden; }
 
   function resetConfirm() {
     clearTimeout(confirmTimer);
-    newBtn.textContent = 'New game';
+    newBtn.textContent = t('newGame');
     delete newBtn.dataset.confirm;
   }
 
@@ -918,7 +1005,7 @@ body:has(.sdk[open]) { overflow: hidden; }
   function askNewGame() {
     if (!hasProgress() || newBtn.dataset.confirm) return newGame();
     newBtn.dataset.confirm = '1';
-    newBtn.textContent = 'Start over';
+    newBtn.textContent = t('startOver');
     confirmTimer = setTimeout(resetConfirm, CONFIRM_MS);
   }
 
@@ -984,15 +1071,22 @@ body:has(.sdk[open]) { overflow: hidden; }
     dialog.setAttribute('aria-labelledby', 'sdkTitle');
     dialog.innerHTML = `
       <div class="sdk-head">
-        <h2 id="sdkTitle">Sudoku</h2>
+        <h2 id="sdkTitle">${t('title')}</h2>
         <span class="sdk-head-tools">
-          <button type="button" class="sound-toggle" data-act="sound" aria-pressed="false" aria-label="Sound on" role="switch">
-            <span>Sound</span>
+          <label class="lang-select-wrap" style="display:inline-flex;align-items:center;gap:0.35rem;">
+            <span class="lang-label">${t('language')}</span>
+            <select class="lang-select" aria-label="${t('language')}" data-act="language">
+              <option value="en">English</option>
+              <option value="zh">简体中文</option>
+            </select>
+          </label>
+          <button type="button" class="sound-toggle" data-act="sound" aria-pressed="false" aria-label="${t('soundOn')}" role="switch">
+            <span>${t('sound')}</span>
             <span class="sound-toggle-track" aria-hidden="true">
               <span class="sound-toggle-thumb"></span>
             </span>
           </button>
-          <button type="button" class="btn btn-sm btn-ghost" data-act="close">Close</button>
+          <button type="button" class="btn btn-sm btn-ghost" data-act="close">${t('close')}</button>
         </span>
       </div>
       <div class="sdk-play">
@@ -1000,13 +1094,13 @@ body:has(.sdk[open]) { overflow: hidden; }
         <p class="sdk-status" role="status"></p>
         <div class="sdk-pad" role="group" aria-label="Numbers"></div>
         <div class="sdk-tools">
-          <button type="button" class="btn btn-sm" data-act="notes" aria-pressed="false">Notes</button>
-          <button type="button" class="btn btn-sm" data-act="undo">Undo</button>
-          <button type="button" class="btn btn-sm btn-erase" data-act="erase"><span>Erase</span></button>
-          <button type="button" class="btn btn-sm" data-act="check">Check</button>
-          <button type="button" class="btn btn-sm" data-act="new">New game</button>
+          <button type="button" class="btn btn-sm" data-act="notes" aria-pressed="false">${t('notes')}</button>
+          <button type="button" class="btn btn-sm" data-act="undo">${t('undo')}</button>
+          <button type="button" class="btn btn-sm btn-erase" data-act="erase"><span>${t('erase')}</span></button>
+          <button type="button" class="btn btn-sm" data-act="check">${t('check')}</button>
+          <button type="button" class="btn btn-sm" data-act="new">${t('newGame')}</button>
         </div>
-        <footer class="sdk-footer">Build: <span data-build-id>${BUILD_ID}</span></footer>
+        <footer class="sdk-footer"><span data-build-label>${t('build')}</span>: <span data-build-id>${BUILD_ID}</span></footer>
       </div>`;
     document.body.appendChild(dialog);
     board = dialog.querySelector('.sdk-board');
@@ -1015,9 +1109,14 @@ body:has(.sdk[open]) { overflow: hidden; }
     notesBtn = dialog.querySelector('[data-act="notes"]');
     newBtn = dialog.querySelector('[data-act="new"]');
     soundBtn = dialog.querySelector('[data-act="sound"]');
+    langSelect = dialog.querySelector('[data-act="language"]');
+    buildLabel = dialog.querySelector('[data-build-label]');
     const eraseBtn = dialog.querySelector('[data-act="erase"]');
     if (STANDALONE) dialog.querySelector('[data-act="close"]').remove();
+    langSelect.value = currentLang;
+    langSelect.addEventListener('change', (e) => setLanguage(e.target.value));
     setSound(soundOn);
+    setLanguage(currentLang);
     eraseBtn.addEventListener('pointerdown', onPointerHold);
     eraseBtn.addEventListener('pointerup', onPointerHold);
     eraseBtn.addEventListener('pointercancel', onPointerHold);
