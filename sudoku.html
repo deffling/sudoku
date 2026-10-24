@@ -572,7 +572,7 @@ body:has(.sdk[open]) { overflow: hidden; }
       osc.type = type;
       osc.frequency.value = freq;
       amp.gain.setValueAtTime(0.0001, now + start);
-      amp.gain.exponentialRampToValueAtTime(SOUND_GAIN * volume * 2.2, now + start + 0.38);
+      amp.gain.exponentialRampToValueAtTime(SOUND_GAIN * volume * 1.65, now + start + 0.38);
       amp.gain.exponentialRampToValueAtTime(0.0001, now + start + length);
       osc.connect(amp).connect(audio.destination);
       osc.start(now + start);
