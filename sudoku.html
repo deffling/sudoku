@@ -1048,10 +1048,10 @@ body:has(.sdk[open]) { overflow: hidden; }
       el.classList.toggle('sdk-peer', peer);
       el.classList.toggle('sdk-same', selValue >= 0 && i !== selected && v === selValue);
       el.classList.toggle('sdk-conflict', clashes.has(i) || wrong.has(i));
-      const hintCell = hintVisual?.cells.includes(i) && v < 0;
+      const hintCell = Boolean(hintVisual && hintVisual.cells.includes(i) && v < 0);
       el.classList.toggle('sdk-hint-unit', hintCell && i !== hintVisual.index);
-      el.classList.toggle('sdk-hint-target', hintVisual?.index === i);
-      el.classList.toggle('sdk-hint-blocker', hintVisual?.blockers.includes(i));
+      el.classList.toggle('sdk-hint-target', Boolean(hintVisual && hintVisual.index === i));
+      el.classList.toggle('sdk-hint-blocker', Boolean(hintVisual && hintVisual.blockers.includes(i)));
       el.tabIndex = i === selected ? 0 : -1;
 
       // Rebuild the content only when it changes: a new element would restart
@@ -1121,9 +1121,7 @@ body:has(.sdk[open]) { overflow: hidden; }
       setGuideKeyHighlight(undefined);
       hintVisual = null;
       if (game) renderBoard();
-      if (selected >= 0 && game && !game.puzzle[selected]) {
-        setStatus('');
-      }
+      setStatus('');
       if (guideBtn) {
         guideBtn.setAttribute('aria-pressed', String(on));
         guideBtn.classList.toggle('is-on', on);
