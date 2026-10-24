@@ -1070,8 +1070,6 @@ body:has(.sdk[open]) { overflow: hidden; }
     if (hint) {
       selected = hint.index;
       renderBoard();
-      animate(cells[hint.index], 'sdk-focus-pulse');
-      animate(cells[hint.index], 'sdk-focus-pulse');
       cells[hint.index]?.focus();
       setGuideKeyHighlight(hint.value);
     }
@@ -1095,8 +1093,15 @@ body:has(.sdk[open]) { overflow: hidden; }
     const open = range(game.values.length).filter(i => game.values[i] < 0 && game.puzzle[i] < 0);
     if (!open.length) return null;
 
-    const candidates = skipSelected ? open.filter(i => i !== selected) : open;
-    const source = candidates.length ? candidates : open;
+    const boxCounts = new Map();
+    for (const i of open) {
+      const box = geo.box[i];
+      boxCounts.set(box, (boxCounts.get(box) ?? 0) + 1);
+    }
+    const valid = open.filter(i => (boxCounts.get(geo.box[i]) ?? 0) > 1);
+    const candidates = skipSelected ? valid.filter(i => i !== selected) : valid;
+    const source = candidates.length ? candidates : valid;
+    if (!source.length) return null;
 
     const scored = source
       .map(i => {
