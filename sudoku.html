@@ -4,6 +4,10 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="theme-color" content="#111111">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Sudoku">
+<link rel="manifest" href="./manifest.webmanifest">
+<link rel="apple-touch-icon" href="./icons/icon-192.png">
 <title>Sudoku</title>
 <!-- Built by tools/build-sudoku.mjs from sudoku.js and pba-ui.css. Don't edit by hand. -->
 <style>
@@ -204,6 +208,17 @@ body:has(.sdk[open]) { overflow: hidden; }
 .sdk-cell.sdk-same { background: var(--green-tint); }
 .sdk-cell.sdk-conflict { background: var(--error-bg); color: var(--error); }
 .sdk-cell.sdk-selected { background: var(--green); color: var(--ink); box-shadow: inset 0 0 0 2px rgba(24, 36, 26, 0.22); }
+.sdk-cell.sdk-hint-unit { background: var(--green-tint); }
+.sdk-cell.sdk-hint-target { background: var(--green); color: var(--ink); box-shadow: inset 0 0 0 3px var(--green-text); }
+.sdk-cell.sdk-hint-blocker { box-shadow: inset 0 0 0 2px var(--green-text); }
+.sdk-hint-candidates {
+  position: absolute; inset: 0; display: grid; grid-template-columns: repeat(var(--note-cols), 1fr);
+  width: 100%; height: 100%; padding: 1px; background: var(--green-tint); color: var(--muted);
+  font-size: max(7px, calc(var(--cell) / var(--note-cols) * 0.72)); font-weight: 500; line-height: 1;
+}
+.sdk-hint-candidates span { display: flex; align-items: center; justify-content: center; }
+.sdk-hint-candidates .sdk-hint-candidate-target { border-radius: 50%; background: var(--green); color: var(--ink); font-weight: 800; }
+.sdk-cell { position: relative; }
 .sdk-cell.sdk-focus-pulse { animation: sdk-focus-pulse 220ms ease-out; }
 @keyframes sdk-focus-pulse {
   0%   { transform: translateY(0) scale(0.98); box-shadow: inset 0 0 0 2px rgba(24, 36, 26, 0.18); }
@@ -373,6 +388,7 @@ body:has(.sdk[open]) { overflow: hidden; }
   let eraseHoldBtn = null;
   let guideMode = false;
   let guideHintTimer = 0;
+  let hintVisual = null;
   let currentLang = storeGet('lang') || 'en';
 
   function t(key, params = {}) {
@@ -619,6 +635,7 @@ body:has(.sdk[open]) { overflow: hidden; }
 
   function afterMove() {
     wrong.clear();
+    hintVisual = null;
     saveGame();
     renderBoard();
     if (isSolved()) {
@@ -910,6 +927,7 @@ body:has(.sdk[open]) { overflow: hidden; }
   }
 
   function check() {
+    hintVisual = null;
     wrong = new Set(game.values
       .map((v, i) => (v >= 0 && game.puzzle[i] < 0 && v !== game.solution[i] ? i : -1))
       .filter(i => i >= 0));
@@ -959,6 +977,7 @@ body:has(.sdk[open]) { overflow: hidden; }
 
   function showGame(g) {
     game = g;
+    hintVisual = null;
     history = [];
     wrong.clear();
     selected = firstEmpty();
@@ -1029,14 +1048,19 @@ body:has(.sdk[open]) { overflow: hidden; }
       el.classList.toggle('sdk-peer', peer);
       el.classList.toggle('sdk-same', selValue >= 0 && i !== selected && v === selValue);
       el.classList.toggle('sdk-conflict', clashes.has(i) || wrong.has(i));
+      const hintCell = hintVisual?.cells.includes(i) && v < 0;
+      el.classList.toggle('sdk-hint-unit', hintCell && i !== hintVisual.index);
+      el.classList.toggle('sdk-hint-target', hintVisual?.index === i);
+      el.classList.toggle('sdk-hint-blocker', hintVisual?.blockers.includes(i));
       el.tabIndex = i === selected ? 0 : -1;
 
       // Rebuild the content only when it changes: a new element would restart
       // a pop or shake that is still playing.
-      const key = `${v}|${game.notes[i]}`;
+      const hintMask = hintCell ? hintVisual.options[i] : 0;
+      const key = `${v}|${game.notes[i]}|${hintMask}|${hintVisual?.index === i ? hintVisual.value : -1}`;
       if (el.dataset.key !== key) {
         el.dataset.key = key;
-        el.replaceChildren(...cellContent(v, game.notes[i], n));
+        el.replaceChildren(...cellContent(v, game.notes[i], n, hintMask, hintVisual?.index === i ? hintVisual.value : -1));
       }
       const content = v >= 0 ? SYMBOLS[v] : 'empty';
       el.setAttribute('aria-label', `Row ${row[i] + 1}, column ${col[i] + 1}: ${content}${given ? ', given' : ''}`);
@@ -1045,22 +1069,38 @@ body:has(.sdk[open]) { overflow: hidden; }
   }
 
   // A cell's number, or its notes laid out like a small box, or nothing.
-  function cellContent(v, notes, n) {
+  function cellContent(v, notes, n, hintMask = 0, hintValue = -1) {
     if (v >= 0) {
       const value = document.createElement('span');
       value.className = 'sdk-val';
       value.textContent = SYMBOLS[v];
       return [value];
     }
-    if (!notes) return [];
-    const marks = document.createElement('span');
-    marks.className = 'sdk-notes';
-    for (let k = 0; k < n; k++) {
-      const s = document.createElement('span');
-      s.textContent = notes & (1 << k) ? SYMBOLS[k] : '';
-      marks.appendChild(s);
+    const content = [];
+    if (notes) {
+      const marks = document.createElement('span');
+      marks.className = 'sdk-notes';
+      for (let k = 0; k < n; k++) {
+        const s = document.createElement('span');
+        s.textContent = notes & (1 << k) ? SYMBOLS[k] : '';
+        marks.appendChild(s);
+      }
+      content.push(marks);
     }
-    return [marks];
+    if (hintMask) {
+      const candidates = document.createElement('span');
+      candidates.className = 'sdk-hint-candidates';
+      for (let k = 0; k < n; k++) {
+        const s = document.createElement('span');
+        if (hintMask & (1 << k)) {
+          s.textContent = SYMBOLS[k];
+          if (k === hintValue) s.className = 'sdk-hint-candidate-target';
+        }
+        candidates.appendChild(s);
+      }
+      content.push(candidates);
+    }
+    return content;
   }
 
   function setGuideKeyHighlight(symbol) {
@@ -1079,6 +1119,8 @@ body:has(.sdk[open]) { overflow: hidden; }
     if (!on) {
       clearGuideHintTimer();
       setGuideKeyHighlight(undefined);
+      hintVisual = null;
+      if (game) renderBoard();
       if (selected >= 0 && game && !game.puzzle[selected]) {
         setStatus('');
       }
@@ -1183,7 +1225,7 @@ body:has(.sdk[open]) { overflow: hidden; }
           return null;
         }
         if (locations.length === 1 &&
-            !addDeduction(locations[0], value, filled, unit.type, { kind: unit.type, index: unit.index })) {
+            !addDeduction(locations[0], value, filled, unit.type, { kind: unit.type, index: unit.index, cells: unit.cells })) {
           setStatus(t('noHint'));
           return null;
         }
@@ -1209,6 +1251,15 @@ body:has(.sdk[open]) { overflow: hidden; }
     const row = geo.row[preferred] + 1;
     const col = geo.col[preferred] + 1;
     const reason = source[0].reason;
+    hintVisual = {
+      index: preferred,
+      value: source[0].value,
+      cells: reason.kind === 'cell' ? [preferred] : reason.cells,
+      blockers: reason.kind === 'cell'
+        ? geo.peers[preferred].filter(i => game.values[i] >= 0)
+        : [],
+      options,
+    };
     const reasonKey = ['hintRow', 'hintColumn', 'hintBox'][reason.kind];
     const explanation = reason.kind === 'cell'
       ? t('hintCell', { value, row, col })
@@ -1428,7 +1479,15 @@ body:has(.sdk[open]) { overflow: hidden; }
     cells[selected]?.focus();
   }
 
-  if (STANDALONE) return openSudoku();
+  if (STANDALONE) {
+    if ('serviceWorker' in navigator && isSecureContext &&
+        (location.protocol === 'https:' || location.hostname === 'localhost')) {
+      navigator.serviceWorker.register('./sw.js').catch(error => {
+        console.error('Sudoku offline support registration failed:', error);
+      });
+    }
+    return openSudoku();
+  }
 
   const trigger = document.getElementById('appBuild');
   if (!trigger) return;
