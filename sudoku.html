@@ -310,7 +310,11 @@ body:has(.sdk[open]) { overflow: hidden; }
       solved: 'Solved! Well done.',
       noMistakes: 'No mistakes so far.',
       wrong: '{n} wrong, shown in red.',
-      hint: 'Hint: try {value} in row {row}, column {col}.',
+      hint: 'Hint: {reason}',
+      hintCell: 'Only {value} can go in row {row}, column {col}.',
+      hintRow: 'Only place for {value} in row {unit} is column {col}.',
+      hintColumn: 'Only place for {value} in column {unit} is row {row}.',
+      hintBox: 'Only place for {value} in box {unit} is row {row}, column {col}.',
       noHint: 'No direct deduction is available yet.',
       makingPuzzle: 'Making a puzzle…',
       language: 'Language',
@@ -333,7 +337,11 @@ body:has(.sdk[open]) { overflow: hidden; }
       solved: '已完成！很好。',
       noMistakes: '目前还没有错误。',
       wrong: '{n} 处错误，已标红。',
-      hint: '提示：在第 {row} 行，第 {col} 列试 {value}。',
+      hint: '提示：{reason}',
+      hintCell: '第 {row} 行第 {col} 列只能填 {value}。',
+      hintRow: '第 {unit} 行中，{value} 只能填在第 {col} 列。',
+      hintColumn: '第 {unit} 列中，{value} 只能填在第 {row} 行。',
+      hintBox: '第 {unit} 宫中，{value} 只能填在第 {row} 行第 {col} 列。',
       noHint: '目前还没有可以直接推导的数字。',
       makingPuzzle: '正在生成题目…',
       language: '语言',
@@ -1129,21 +1137,23 @@ body:has(.sdk[open]) { overflow: hidden; }
 
     const units = [];
     for (let r = 0; r < n; r++) {
-      units.push({ cells: range(n * n).filter(i => geo.row[i] === r), type: 0 });
+      units.push({ cells: range(n * n).filter(i => geo.row[i] === r), type: 0, index: r });
     }
     for (let c = 0; c < n; c++) {
-      units.push({ cells: range(n * n).filter(i => geo.col[i] === c), type: 1 });
+      units.push({ cells: range(n * n).filter(i => geo.col[i] === c), type: 1, index: c });
     }
     for (let b = 0; b < n; b++) {
-      units.push({ cells: range(n * n).filter(i => geo.box[i] === b), type: 2 });
+      units.push({ cells: range(n * n).filter(i => geo.box[i] === b), type: 2, index: b });
     }
 
     const deductions = new Map();
-    const addDeduction = (i, value, score, type) => {
+    const addDeduction = (i, value, score, type, reason) => {
       const current = deductions.get(i);
+      if (current && current.value !== value) return false;
       if (!current || score > current.score || (score === current.score && type < current.type)) {
-        deductions.set(i, { i, value, score, type, selected: i === selected });
+        deductions.set(i, { i, value, score, type, reason, selected: i === selected });
       }
+      return true;
     };
 
     for (const i of open) {
@@ -1156,7 +1166,10 @@ body:has(.sdk[open]) { overflow: hidden; }
             type: unit.type,
           }))
           .sort((a, b) => b.score - a.score || a.type - b.type)[0];
-        addDeduction(i, value, bestUnit.score, bestUnit.type);
+        if (!addDeduction(i, value, bestUnit.score, bestUnit.type, { kind: 'cell' })) {
+          setStatus(t('noHint'));
+          return null;
+        }
       }
     }
 
@@ -1169,7 +1182,11 @@ body:has(.sdk[open]) { overflow: hidden; }
           setStatus(t('noHint'));
           return null;
         }
-        if (locations.length === 1) addDeduction(locations[0], value, filled, unit.type);
+        if (locations.length === 1 &&
+            !addDeduction(locations[0], value, filled, unit.type, { kind: unit.type, index: unit.index })) {
+          setStatus(t('noHint'));
+          return null;
+        }
       }
     }
 
@@ -1191,7 +1208,12 @@ body:has(.sdk[open]) { overflow: hidden; }
     const value = SYMBOLS[source[0].value];
     const row = geo.row[preferred] + 1;
     const col = geo.col[preferred] + 1;
-    setStatus(t('hint', { value, row, col }));
+    const reason = source[0].reason;
+    const reasonKey = ['hintRow', 'hintColumn', 'hintBox'][reason.kind];
+    const explanation = reason.kind === 'cell'
+      ? t('hintCell', { value, row, col })
+      : t(reasonKey, { value, row, col, unit: reason.index + 1 });
+    setStatus(t('hint', { reason: explanation }));
     setGuideKeyHighlight(value);
     animate(cells[preferred], 'sdk-flash', 0);
     return { index: preferred, value, row, col };
