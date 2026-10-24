@@ -610,12 +610,18 @@ body:has(.sdk[open]) { overflow: hidden; }
   }
 
   function erase() {
-    const i = selected;
-    if (i < 0 || game.puzzle[i] >= 0 || isSolved()) return;
-    if (game.values[i] < 0 && !game.notes[i]) return;
-    history.push(snapshot([i]));
-    game.values[i] = -1;
-    game.notes[i] = 0;
+    if (!game || isSolved()) return;
+    const touched = [];
+    for (let i = 0; i < game.values.length; i++) {
+      if (game.puzzle[i] >= 0) continue;
+      if (game.values[i] < 0 && !game.notes[i]) continue;
+      touched.push({ i, value: game.values[i], notes: game.notes[i] });
+      game.values[i] = -1;
+      game.notes[i] = 0;
+    }
+    if (!touched.length) return;
+    history.push(touched);
+    selected = touched[0].i;
     afterMove();
     play('erase');
   }
@@ -997,10 +1003,22 @@ body:has(.sdk[open]) { overflow: hidden; }
 
   function findNextHint() {
     if (!game || isSolved()) return null;
+
+    const wrongNow = [...wrong];
+    if (wrongNow.length) {
+      const preferred = wrongNow[0];
+      const value = SYMBOLS[game.solution[preferred]];
+      const row = geo.row[preferred] + 1;
+      const col = geo.col[preferred] + 1;
+      setStatus(t('hint', { value, row, col }));
+      animate(cells[preferred], 'sdk-flash', 0);
+      return { index: preferred, value, row, col };
+    }
+
     const open = range(game.values.length).filter(i => game.values[i] < 0 && game.puzzle[i] < 0);
     if (!open.length) return null;
     const preferred = open.find(i => i === selected) ?? open[0];
-    const value = game.solution[preferred];
+    const value = SYMBOLS[game.solution[preferred]];
     const row = geo.row[preferred] + 1;
     const col = geo.col[preferred] + 1;
     setStatus(t('hint', { value, row, col }));
@@ -1031,8 +1049,10 @@ body:has(.sdk[open]) { overflow: hidden; }
   }
 
   function cancelEraseHold() {
-    if (eraseHoldFrame) cancelAnimationFrame(eraseHoldFrame);
-    eraseHoldFrame = 0;
+    if (eraseHoldFrame) {
+      clearTimeout(eraseHoldFrame);
+      eraseHoldFrame = 0;
+    }
     if (eraseHoldBtn) {
       eraseHoldBtn.style.setProperty('--erase-progress', '0%');
       eraseHoldBtn.classList.remove('is-holding');
@@ -1040,24 +1060,34 @@ body:has(.sdk[open]) { overflow: hidden; }
     }
   }
 
-  function startEraseHold(button) {
+  function startEraseHold(button, pointerId) {
     if (!button || !game) return;
     cancelEraseHold();
     eraseHoldBtn = button;
     eraseHoldStart = performance.now();
     eraseHoldBtn.classList.add('is-holding');
+    if (pointerId !== undefined && button.setPointerCapture) {
+      try { button.setPointerCapture(pointerId); } catch {}
+    }
     const tick = () => {
       const elapsed = performance.now() - eraseHoldStart;
       const progress = Math.min(100, (elapsed / ERASE_HOLD_MS) * 100);
-      eraseHoldBtn.style.setProperty('--erase-progress', `${progress}%`);
+      if (eraseHoldBtn) {
+        eraseHoldBtn.style.setProperty('--erase-progress', `${progress}%`);
+      }
       if (progress >= 100) {
+        const completedBtn = eraseHoldBtn;
         cancelEraseHold();
         erase();
+        if (completedBtn && completedBtn.isConnected) {
+          completedBtn.style.setProperty('--erase-progress', '100%');
+          setTimeout(() => completedBtn.style.setProperty('--erase-progress', '0%'), 120);
+        }
         return;
       }
-      eraseHoldFrame = requestAnimationFrame(tick);
+      eraseHoldFrame = setTimeout(tick, 16);
     };
-    eraseHoldFrame = requestAnimationFrame(tick);
+    eraseHoldFrame = setTimeout(tick, 16);
   }
 
   // Unfinished work goes only on a second tap.
@@ -1075,11 +1105,14 @@ body:has(.sdk[open]) { overflow: hidden; }
     if (!t || t.dataset.act !== 'erase') return;
     if (e.type === 'pointerdown') {
       e.preventDefault();
-      startEraseHold(t);
+      startEraseHold(t, e.pointerId);
       return;
     }
     if (e.type === 'pointerup' || e.type === 'pointercancel' || e.type === 'pointerleave') {
       cancelEraseHold();
+      if (e.pointerId !== undefined && t.releasePointerCapture) {
+        try { t.releasePointerCapture(e.pointerId); } catch {}
+      }
     }
   }
 
