@@ -1,0 +1,978 @@
+<!doctype html>
+<html lang="en-SG" data-sudoku-standalone>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#111111">
+<title>Sudoku</title>
+<!-- Built by tools/build-sudoku.mjs from sudoku.js and pba-ui.css. Don't edit by hand. -->
+<style>
+:root {
+  /* colour */
+  --green: #82ff00;
+  --green-text: #3d7a00;    /* links and success text on white (5.3:1) */
+  --green-tint: #f0ffe0;
+  --green-line: #b8e08a;    /* border of a green-tint box */
+  --ink: #111;
+  --ink-2: #3a3a3a;
+  --muted: #5f5f5f;
+  --line: #e6e6e6;
+  --line-strong: #cfcfcf;
+  --bg: #f5f6f4;
+  --surface: #fff;
+  --surface-2: #fafafa;
+  --row-hover: #f0f0f0;
+  --error: #b00020;
+  --error-bg: #fdecee;
+  --error-line: #f3c2c9;
+
+  /* spacing scale (4px base) */
+  --s1: 4px;
+  --s2: 8px;
+  --s3: 12px;
+  --s4: 16px;
+  --s5: 24px;
+  --s6: 32px;
+  --s7: 48px;
+
+  /* shape */
+  --radius: 14px;
+  --radius-sm: 8px;
+  --shadow: 0 1px 2px rgba(17, 17, 17, 0.04), 0 4px 16px rgba(17, 17, 17, 0.04);
+  --shadow-float: 0 8px 28px rgba(0, 0, 0, 0.16);
+  --control-h: 36px;
+  --control-h-sm: 28px;
+  --mono: ui-monospace, "Cascadia Mono", Consolas, monospace;
+
+  /* motion: a strong ease-out, so feedback starts the moment you act */
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--ink);
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+body {
+  margin: 0;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+  -webkit-font-smoothing: antialiased;
+}
+h1, h2, h3, p { margin: 0; }
+a { color: var(--green-text); text-underline-offset: 2px; }
+code { font-family: var(--mono); }
+/* Classes that set display (.btn, .pp-notice…) must not override hidden. */
+[hidden] { display: none !important; }
+.sprite { position: absolute; }
+.visually-hidden {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+}
+
+/* Focus: 2px black inside, 2px green outside - the green alone is too faint on white. */
+:focus-visible { outline: 2px solid var(--ink); outline-offset: 0; box-shadow: 0 0 0 4px var(--green); }
+
+
+/* ── Buttons ── */
+.actions { display: flex; gap: var(--s3); flex-wrap: wrap; align-items: center; }
+.spacer { flex: 1; }
+.btn {
+  font: inherit; font-weight: 600; font-size: 0.93rem; cursor: pointer; text-decoration: none;
+  display: inline-flex; align-items: center; justify-content: center; gap: var(--s2);
+  min-height: var(--control-h); padding: 0 var(--s4); border-radius: var(--radius-sm);
+  border: 1px solid var(--line-strong); background: var(--surface); color: var(--ink);
+  white-space: nowrap; user-select: none;
+  touch-action: manipulation; -webkit-tap-highlight-color: transparent;
+  transition: transform 160ms var(--ease-out), background-color 150ms ease, border-color 150ms ease;
+}
+/* Pressed: a slight give, so a click is felt at once. */
+.btn:active:not(:disabled) { transform: scale(0.97); }
+.btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.btn .ico { width: 15px; height: 15px; }
+.btn-primary { background: var(--green); border-color: var(--green); color: var(--ink); }
+.btn-ghost { background: none; border-color: transparent; color: var(--green-text); padding: 0 var(--s2); }
+.btn-danger { color: var(--error); }
+.btn-sm { min-height: var(--control-h-sm); padding: 0 var(--s3); font-size: 0.86rem; }
+.btn-sm.btn-icon { width: var(--control-h-sm); padding: 0; }
+/* Hover only where there is a mouse: a tap would leave it stuck on. */
+@media (hover: hover) and (pointer: fine) {
+  .btn:hover:not(:disabled) { border-color: var(--ink); background-color: var(--surface-2); }
+  .btn-primary:hover:not(:disabled) { border-color: var(--ink); background-color: var(--green); }
+  .btn-ghost:hover:not(:disabled) { border-color: transparent; background-color: transparent; text-decoration: underline; }
+  .btn-danger:hover:not(:disabled) { border-color: var(--error); background-color: var(--error-bg); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .btn { transition: background-color 150ms ease, border-color 150ms ease; }
+  .btn:active:not(:disabled) { transform: none; }
+}
+
+
+/* ── Sudoku (sudoku.js): hidden; five taps on the build number open it.
+      sudoku.js sets --n, --cell and --note-cols on the board, --pad-cols on
+      the number pad and --sdk-delay on an animating cell. ── */
+#appBuild { touch-action: manipulation; }   /* quick taps must not zoom the page */
+body:has(.sdk[open]) { overflow: hidden; }
+.sdk {
+  width: min(720px, calc(100vw - 2 * var(--s4))); max-width: none;
+  max-height: calc(100dvh - 2 * var(--s4)); overflow: auto;
+  padding: var(--s4) var(--s5); border: none; border-radius: 0;
+  background: transparent; color: var(--ink); box-shadow: none;
+}
+.sdk[open] { display: flex; flex-direction: column; align-items: center; gap: var(--s3); }
+.sdk::backdrop { background: rgba(17, 17, 17, 0.5); }
+.sdk-head { align-self: stretch; display: flex; align-items: center; justify-content: space-between; gap: var(--s3); }
+.sdk-head h2 { margin: 0; font-size: 1.1rem; }
+.sdk-head-tools { display: flex; gap: var(--s1); }
+.sdk-tools {
+  display: grid; grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: var(--s2); width: min(100%, 560px); justify-self: stretch;
+}
+.sdk-tools .btn { width: 100%; justify-content: center; }
+.sdk .btn:not(.btn-ghost)[aria-pressed="true"] { background: var(--green); border-color: var(--ink); color: var(--ink); }
+.sound-toggle {
+  appearance: none; border: none; background: transparent; padding: 0; display: inline-flex;
+  align-items: center; gap: var(--s2); color: var(--ink); cursor: pointer; font: inherit;
+  font-size: 0.9rem; font-weight: 600; user-select: none;
+}
+.sound-toggle-track {
+  position: relative; width: 34px; height: 20px; border-radius: 999px; background: var(--line-strong);
+  border: 1px solid var(--line-strong); transition: background-color 150ms ease, border-color 150ms ease;
+}
+.sound-toggle-thumb {
+  position: absolute; top: 1px; left: 1px; width: 16px; height: 16px; border-radius: 50%;
+  background: var(--surface); box-shadow: 0 1px 2px rgba(17, 17, 17, 0.2);
+  transition: transform 150ms ease;
+}
+.sound-toggle[aria-pressed="true"] .sound-toggle-track {
+  background: var(--green); border-color: var(--ink);
+}
+.sound-toggle[aria-pressed="true"] .sound-toggle-thumb { transform: translateX(14px); }
+.sound-toggle:focus-visible {
+  outline: 2px solid var(--ink); outline-offset: 2px; border-radius: 8px;
+}
+/* The board sets the column's width; the pad and tools stretch to match it. */
+.sdk-play { display: grid; gap: var(--s3); }
+.sdk-board {
+  display: grid; grid-template-columns: repeat(var(--n), var(--cell)); justify-self: center;
+  border: 2px solid var(--ink); background: var(--surface); user-select: none;
+}
+.sdk-cell {
+  width: var(--cell); height: var(--cell); padding: 0;
+  display: flex; align-items: center; justify-content: center;
+  border: 0; border-right: 1px solid var(--line-strong); border-bottom: 1px solid var(--line-strong);
+  background: var(--surface); color: var(--green-text);
+  font: inherit; font-size: calc(var(--cell) * 0.55); font-weight: 600; line-height: 1;
+  cursor: pointer; touch-action: manipulation; -webkit-tap-highlight-color: transparent;
+}
+.sdk-cell.sdk-box-r { border-right: 2px solid var(--ink); }
+.sdk-cell.sdk-box-b { border-bottom: 2px solid var(--ink); }
+.sdk-cell.sdk-edge-r { border-right: 0; }
+.sdk-cell.sdk-edge-b { border-bottom: 0; }
+.sdk-cell.sdk-given { color: var(--ink); font-weight: 700; }
+.sdk-cell.sdk-peer { background: var(--row-hover); }
+.sdk-cell.sdk-same { background: var(--green-tint); }
+.sdk-cell.sdk-conflict { background: var(--error-bg); color: var(--error); }
+.sdk-cell.sdk-selected { background: var(--green); color: var(--ink); }
+.sdk-cell:focus-visible { outline: none; box-shadow: inset 0 0 0 2px var(--ink); }
+.sdk-notes {
+  display: grid; grid-template-columns: repeat(var(--note-cols), 1fr); width: 100%; height: 100%;
+  padding: 1px; color: var(--muted); font-weight: 500; line-height: 1;
+  font-size: max(7px, calc(var(--cell) / var(--note-cols) * 0.72));
+}
+.sdk-notes span { display: flex; align-items: center; justify-content: center; }
+.sdk-status { margin: 0; min-height: 1.45em; text-align: center; font-weight: 600; }
+.sdk-status.sdk-solved { color: var(--green-text); }
+.sdk-pad { display: grid; grid-template-columns: repeat(var(--pad-cols), minmax(0, 1fr)); gap: var(--s1); }
+.sdk-key { padding: 0; font-size: 1.05rem; }
+
+/* Delight: one-shot animations, restarted by sudoku.js. */
+.sdk-pop > .sdk-val { animation: sdk-pop 220ms var(--ease-out) var(--sdk-delay, 0ms) backwards; }
+.sdk-shake > .sdk-val { animation: sdk-shake 300ms ease-in-out; }
+.sdk-flash { animation: sdk-flash 520ms ease-out var(--sdk-delay, 0ms); }
+.sdk-wave { animation: sdk-wave 700ms var(--ease-out) var(--sdk-delay, 0ms); }
+@keyframes sdk-pop { from { transform: scale(0.4); opacity: 0; } }
+@keyframes sdk-shake { 20%, 60% { translate: -3px 0; } 40%, 80% { translate: 3px 0; } }
+@keyframes sdk-flash { 0%, 35% { background-color: var(--green); color: var(--ink); } }
+@keyframes sdk-wave { 40% { background-color: var(--green); color: var(--ink); transform: scale(0.9); } }
+@media (prefers-reduced-motion: reduce) {
+  .sdk-pop > .sdk-val, .sdk-shake > .sdk-val, .sdk-wave { animation: none; }
+  .sdk-flash { animation: sdk-flash 520ms step-end; }   /* a colour blink, no movement */
+}
+
+@media (max-width: 767px) {
+  .sdk {
+    width: 100vw; height: 100dvh; max-height: 100dvh; margin: 0;
+    border-radius: 0; padding: var(--s4);
+  }
+}
+@media (pointer: coarse) {
+  .sdk .btn { min-height: 44px; }
+}
+
+/* ── Standalone page ── */
+.sdk { position: static; }
+@media (min-width: 768px) {
+  .sdk { margin: var(--s4) auto; }   /* 2 × 16px: the room sudoku.js keeps (DIALOG_MARGIN_PX) */
+}
+</style>
+</head>
+<body>
+<script>
+// A hidden Sudoku for ccsp.html and rcp.html: tap the build number in the
+// footer five times. Every puzzle is generated here, so it plays offline once
+// the page is cached. Styles in pba-ui.css (.sdk-*).
+//
+// The classic 9 × 9 with 3 × 3 boxes and digits only (Ivan, 2026-10-23: no
+// levels for now). The generator and board take any box shape, so bigger
+// grids or levels can come back by changing LEVEL. Wrapped in a function: the
+// pages' own globals stay theirs.
+(() => {
+  const LEVEL = { id: 'game', boxRows: 3, boxCols: 3, clues: 38 };
+  const SYMBOLS = '123456789';
+  const MIN_CELL_PX = 26;          // smaller is hard to read and to tap on a phone
+  const MAX_CELL_PX = 56;
+  const BOARD_BORDER_PX = 2;       // .sdk-board's border, both sides
+  const DIALOG_MARGIN_PX = 32;     // room kept above and below the dialog
+  const TAPS_TO_OPEN = 5;
+  const TAP_GAP_MS = 800;          // taps further apart start the count again
+  const CONFIRM_MS = 3000;         // how long "Tap again to start over" waits
+  // Search steps allowed per uniqueness check. Running out keeps that clue,
+  // so a puzzle never ships unless its single solution was proven.
+  const SOLVER_BUDGET = 20000;
+  // Not pref_: CCSP's Export Settings carries pref_* keys, and games don't belong there.
+  const STORE_PREFIX = 'sudoku_';
+  // tools/build-sudoku.mjs builds a one-file sudoku.html with this attribute:
+  // there the game is the whole page, open from the start, with no Close.
+  const STANDALONE = document.documentElement.hasAttribute('data-sudoku-standalone');
+
+  let dialog, board, pad, statusEl, notesBtn, newBtn, soundBtn;
+  let cells = [];
+  const level = LEVEL;
+  let geo = null;
+  let game = null;          // { puzzle, solution, values, notes }: one entry per cell
+  let selected = -1;
+  let notesMode = false;
+  let history = [];         // undo: the cells as they were before each move
+  let wrong = new Set();    // shown after Check, until the next move
+  let busy = false;
+  let confirmTimer = 0;
+
+  // ── Puzzle generation ──
+
+  function range(n) { return Array.from({ length: n }, (_, i) => i); }
+
+  function shuffled(list) {
+    const a = [...list];
+    for (let i = a.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [a[i], a[j]] = [a[j], a[i]];
+    }
+    return a;
+  }
+
+  function bitCount(x) {
+    let count = 0;
+    for (; x; x &= x - 1) count++;
+    return count;
+  }
+
+  // Row, column, box and peers of every cell, for a level's grid.
+  function geometry(lv) {
+    const n = lv.boxRows * lv.boxCols;
+    const boxesAcross = n / lv.boxCols;
+    const row = [], col = [], box = [], peers = [];
+    for (let i = 0; i < n * n; i++) {
+      row[i] = Math.floor(i / n);
+      col[i] = i % n;
+      box[i] = Math.floor(row[i] / lv.boxRows) * boxesAcross + Math.floor(col[i] / lv.boxCols);
+    }
+    for (let i = 0; i < n * n; i++) {
+      peers[i] = range(n * n).filter(j => j !== i && (row[j] === row[i] || col[j] === col[i] || box[j] === box[i]));
+    }
+    return { n, row, col, box, peers };
+  }
+
+  // A random solved grid: the standard pattern, shuffled by moves that keep it
+  // valid (rows within a band, bands, columns within a stack, stacks, symbols).
+  function solvedGrid(lv, n) {
+    const rows = shuffled(range(n / lv.boxRows))
+      .flatMap(band => shuffled(range(lv.boxRows)).map(k => band * lv.boxRows + k));
+    const cols = shuffled(range(n / lv.boxCols))
+      .flatMap(stack => shuffled(range(lv.boxCols)).map(k => stack * lv.boxCols + k));
+    const symbols = shuffled(range(n));
+    const pattern = (r, c) => (lv.boxCols * (r % lv.boxRows) + Math.floor(r / lv.boxRows) + c) % n;
+    const grid = [];
+    for (const r of rows) for (const c of cols) grid.push(symbols[pattern(r, c)]);
+    return grid;
+  }
+
+  const OUT_OF_BUDGET = new Error('solver budget');
+
+  // Solutions of a grid (-1 = empty), counting no further than 2; 0 if the
+  // search ran out of budget. Fills the cell with the fewest options first.
+  function countSolutions(cells0, g) {
+    const { n, row, col, box } = g;
+    const grid = [...cells0];
+    const rowUsed = new Array(n).fill(0), colUsed = new Array(n).fill(0), boxUsed = new Array(n).fill(0);
+    const empty = [];
+    grid.forEach((v, i) => {
+      if (v < 0) { empty.push(i); return; }
+      const bit = 1 << v;
+      rowUsed[row[i]] |= bit; colUsed[col[i]] |= bit; boxUsed[box[i]] |= bit;
+    });
+    const all = (1 << n) - 1;
+    let steps = 0;
+    let found = 0;
+
+    function search() {
+      if (++steps > SOLVER_BUDGET) throw OUT_OF_BUDGET;
+      let best = -1, bestFree = 0, bestCount = n + 1;
+      for (const i of empty) {
+        if (grid[i] >= 0) continue;
+        const free = all & ~(rowUsed[row[i]] | colUsed[col[i]] | boxUsed[box[i]]);
+        const count = bitCount(free);
+        if (count < bestCount) {
+          best = i; bestFree = free; bestCount = count;
+          if (count <= 1) break;
+        }
+      }
+      if (best < 0) return ++found >= 2;   // all filled: one more solution
+      for (let v = 0; v < n; v++) {
+        const bit = 1 << v;
+        if (!(bestFree & bit)) continue;
+        grid[best] = v;
+        rowUsed[row[best]] |= bit; colUsed[col[best]] |= bit; boxUsed[box[best]] |= bit;
+        const stop = search();
+        grid[best] = -1;
+        rowUsed[row[best]] &= ~bit; colUsed[col[best]] &= ~bit; boxUsed[box[best]] &= ~bit;
+        if (stop) return true;
+      }
+      return false;
+    }
+
+    try {
+      search();
+    } catch (e) {
+      if (e === OUT_OF_BUDGET) return 0;
+      throw e;
+    }
+    return found;
+  }
+
+  // Take numbers out of a solved grid in random order, putting back any whose
+  // removal would allow a second solution, until the level's clue count.
+  function makePuzzle(lv, g) {
+    const solution = solvedGrid(lv, g.n);
+    const puzzle = [...solution];
+    let clues = puzzle.length;
+    for (const i of shuffled(range(puzzle.length))) {
+      if (clues <= lv.clues) break;
+      const v = puzzle[i];
+      puzzle[i] = -1;
+      if (countSolutions(puzzle, g) === 1) clues--;
+      else puzzle[i] = v;
+    }
+    return { puzzle, solution, values: [...puzzle], notes: new Array(puzzle.length).fill(0) };
+  }
+
+  // ── Saved games: one per level, in this browser only ──
+
+  function storeGet(key) {
+    try { return localStorage.getItem(STORE_PREFIX + key); } catch { return null; }
+  }
+  function storeSet(key, value) {
+    try { localStorage.setItem(STORE_PREFIX + key, value); } catch { /* private window: play unsaved */ }
+  }
+  function storeRemove(key) {
+    try { localStorage.removeItem(STORE_PREFIX + key); } catch { /* nothing to remove */ }
+  }
+
+  function loadGame(lv, g) {
+    try {
+      const saved = JSON.parse(storeGet(lv.id));
+      const size = g.n * g.n;
+      const valid = saved && ['puzzle', 'solution', 'values', 'notes'].every(k => Array.isArray(saved[k]) && saved[k].length === size);
+      return valid ? saved : null;
+    } catch {
+      return null;
+    }
+  }
+
+  function saveGame() {
+    if (game) storeSet(level.id, JSON.stringify(game));
+  }
+
+  // ── Game state ──
+
+  function isSolved() {
+    return game.values.every((v, i) => v === game.solution[i]);
+  }
+
+  function hasProgress() {
+    return game && !isSolved() && game.values.some((v, i) => v >= 0 && game.puzzle[i] < 0);
+  }
+
+  function conflicts() {
+    const found = new Set();
+    game.values.forEach((v, i) => {
+      if (v >= 0 && geo.peers[i].some(j => game.values[j] === v)) found.add(i);
+    });
+    return found;
+  }
+
+  function firstEmpty() {
+    const i = game.values.indexOf(-1);
+    return i >= 0 ? i : 0;
+  }
+
+  function snapshot(indices) {
+    return indices.map(i => ({ i, value: game.values[i], notes: game.notes[i] }));
+  }
+
+  function afterMove() {
+    wrong.clear();
+    saveGame();
+    renderBoard();
+    if (isSolved()) {
+      storeRemove(level.id);
+      setStatus('Solved! Well done.', true);
+    } else {
+      setStatus('');
+    }
+  }
+
+  function enter(symbol) {
+    const i = selected;
+    if (i < 0 || game.puzzle[i] >= 0 || isSolved()) return;
+    if (notesMode) {
+      if (game.values[i] >= 0) return;
+      history.push(snapshot([i]));
+      game.notes[i] ^= 1 << symbol;
+      afterMove();
+      play('note');
+      return;
+    }
+    const placing = game.values[i] !== symbol;
+    const bit = 1 << symbol;
+    // Placing a number also clears it from the notes of the cells it rules out.
+    const touched = placing ? [i, ...geo.peers[i].filter(j => game.notes[j] & bit)] : [i];
+    history.push(snapshot(touched));
+    game.values[i] = placing ? symbol : -1;
+    game.notes[i] = 0;
+    if (placing) touched.slice(1).forEach(j => { game.notes[j] &= ~bit; });
+    afterMove();
+    if (placing) reactToPlacing(i, symbol);
+    else play('erase');
+  }
+
+  function erase() {
+    const i = selected;
+    if (i < 0 || game.puzzle[i] >= 0 || isSolved()) return;
+    if (game.values[i] < 0 && !game.notes[i]) return;
+    history.push(snapshot([i]));
+    game.values[i] = -1;
+    game.notes[i] = 0;
+    afterMove();
+    play('erase');
+  }
+
+  // ── Delight: small animations and synthesised sounds ──
+  // Sounds are made with Web Audio (no files, so offline too) and can be
+  // switched off. Animations stop under prefers-reduced-motion (pba-ui.css).
+
+  let audio = null;
+  let soundOn = storeGet('sound') !== 'off';
+  let ambientLoop = null;
+  let ambientNodes = [];
+  const SOUND_GAIN = 0.07;   // quiet: this may be played at a desk
+  const SOUNDS = {
+    place:  [[660, 0, 0.09, 'triangle']],
+    note:   [[990, 0, 0.05, 'sine', 0.5]],
+    erase:  [[392, 0, 0.07, 'triangle', 0.7]],
+    clash:  [[196, 0, 0.16, 'square', 0.35], [185, 0.05, 0.16, 'square', 0.35]],
+    unit:   [[523, 0, 0.12, 'sine'], [659, 0.07, 0.12, 'sine'], [784, 0.14, 0.2, 'sine']],
+    solved: [[523, 0, 0.15, 'sine'], [659, 0.1, 0.15, 'sine'], [784, 0.2, 0.15, 'sine'],
+             [1047, 0.3, 0.5, 'sine'], [784, 0.3, 0.5, 'triangle', 0.4]],
+    start:  [[440, 0, 0.08, 'sine', 0.6], [587, 0.06, 0.12, 'sine', 0.6]],
+  };
+
+  function playAmbientLoop() {
+    if (!soundOn) return;
+    try {
+      audio ??= new AudioContext();
+      if (audio.state === 'suspended') audio.resume();
+    } catch {
+      return;
+    }
+    const phrase = [
+      [261.63, 0.00, 4.00, 'sine', 0.12],
+      [329.63, 0.10, 4.00, 'sine', 0.10],
+      [392.00, 0.20, 4.00, 'triangle', 0.08],
+      [523.25, 0.32, 4.00, 'sine', 0.07],
+
+      [392.00, 4.40, 4.20, 'sine', 0.11],
+      [440.00, 4.55, 4.20, 'triangle', 0.09],
+      [523.25, 4.70, 4.20, 'sine', 0.08],
+      [659.25, 4.90, 4.20, 'triangle', 0.06],
+
+      [587.33, 9.20, 4.50, 'sine', 0.10],
+      [659.25, 9.35, 4.50, 'triangle', 0.08],
+      [783.99, 9.50, 4.50, 'sine', 0.07],
+      [698.46, 9.65, 4.50, 'triangle', 0.06],
+
+      [659.25, 14.10, 4.80, 'sine', 0.09],
+      [587.33, 14.30, 4.80, 'triangle', 0.08],
+      [523.25, 14.55, 4.80, 'sine', 0.07],
+      [392.00, 14.80, 4.80, 'triangle', 0.06],
+
+      [329.63, 19.30, 5.20, 'sine', 0.08],
+      [293.66, 19.55, 5.20, 'triangle', 0.07],
+      [261.63, 19.80, 5.20, 'sine', 0.06],
+    ];
+    const now = audio.currentTime;
+    ambientNodes.forEach(node => {
+      const { amp, osc } = node;
+      try {
+        amp.gain.cancelScheduledValues(now);
+        amp.gain.setValueAtTime(amp.gain.value || 0.0001, now);
+        amp.gain.exponentialRampToValueAtTime(0.0001, now + 0.1);
+        osc.stop(now + 0.12);
+      } catch {}
+    });
+    ambientNodes = [];
+    for (const [freq, start, length, type, volume] of phrase) {
+      const osc = audio.createOscillator();
+      const amp = audio.createGain();
+      osc.type = type;
+      osc.frequency.value = freq;
+      amp.gain.setValueAtTime(0.0001, now + start);
+      amp.gain.exponentialRampToValueAtTime(SOUND_GAIN * volume * 3.8, now + start + 0.38);
+      amp.gain.exponentialRampToValueAtTime(0.0001, now + start + length);
+      osc.connect(amp).connect(audio.destination);
+      osc.start(now + start);
+      osc.stop(now + start + length + 0.45);
+      ambientNodes.push({ osc, amp });
+    }
+  }
+
+  function startAmbientLoop() {
+    if (!soundOn || ambientLoop) return;
+    playAmbientLoop();
+    ambientLoop = setInterval(() => {
+      if (soundOn) playAmbientLoop();
+    }, 22000);
+  }
+
+  function stopAmbientLoop() {
+    if (ambientLoop) {
+      clearInterval(ambientLoop);
+      ambientLoop = null;
+    }
+    ambientNodes.forEach(({ amp, osc }) => {
+      try {
+        const now = audio?.currentTime ?? 0;
+        amp.gain.cancelScheduledValues(now);
+        amp.gain.setValueAtTime(amp.gain.value || 0.0001, now);
+        amp.gain.exponentialRampToValueAtTime(0.0001, now + 0.08);
+        osc.stop(now + 0.09);
+      } catch {}
+    });
+    ambientNodes = [];
+  }
+
+  function setSound(on) {
+    soundOn = on;
+    storeSet('sound', on ? 'on' : 'off');
+    soundBtn.setAttribute('aria-pressed', String(on));
+    soundBtn.setAttribute('aria-label', `Sound ${on ? 'on' : 'off'}`);
+    soundBtn.classList.toggle('is-on', on);
+    if (on) startAmbientLoop();
+    else stopAmbientLoop();
+  }
+
+  // Each tone: [frequency Hz, start s, length s, waveform, relative volume].
+  function play(name) {
+    if (!soundOn) return;
+    try {
+      audio ??= new AudioContext();
+      if (audio.state === 'suspended') audio.resume();
+    } catch {
+      return;   // no Web Audio: silent
+    }
+    const now = audio.currentTime;
+    for (const [freq, start, length, type, volume = 1] of SOUNDS[name]) {
+      const osc = audio.createOscillator();
+      const amp = audio.createGain();
+      osc.type = type;
+      osc.frequency.value = freq;
+      // A quick rise and an exponential fall: a soft pluck, no click.
+      amp.gain.setValueAtTime(0.0001, now + start);
+      amp.gain.exponentialRampToValueAtTime(SOUND_GAIN * volume, now + start + 0.01);
+      amp.gain.exponentialRampToValueAtTime(0.0001, now + start + length);
+      osc.connect(amp).connect(audio.destination);
+      osc.start(now + start);
+      osc.stop(now + start + length + 0.02);
+    }
+  }
+
+  // Restarts a one-shot CSS animation on a cell, after an optional delay.
+  function animate(el, cls, delayMs = 0) {
+    el.classList.remove(cls);
+    void el.offsetWidth;   // reflow, so the same animation can play again
+    if (delayMs) el.style.setProperty('--sdk-delay', `${delayMs}ms`);
+    else el.style.removeProperty('--sdk-delay');
+    el.classList.add(cls);
+    el.addEventListener('animationend', () => el.classList.remove(cls), { once: true });
+  }
+
+  // Rows, columns and boxes through cell i that are now full with no clash.
+  function completedUnits(i) {
+    const { n, row, col, box } = geo;
+    const units = [
+      range(n * n).filter(j => row[j] === row[i]),
+      range(n * n).filter(j => col[j] === col[i]),
+      range(n * n).filter(j => box[j] === box[i]),
+    ];
+    return units.filter(unit => {
+      const values = unit.map(j => game.values[j]);
+      return values.every(v => v >= 0) && new Set(values).size === n;
+    });
+  }
+
+  function distance(a, b) {
+    return Math.abs(geo.row[a] - geo.row[b]) + Math.abs(geo.col[a] - geo.col[b]);
+  }
+
+  function reactToPlacing(i, symbol) {
+    if (isSolved()) return celebrate(i);
+    if (geo.peers[i].some(j => game.values[j] === symbol)) {
+      animate(cells[i], 'sdk-shake');
+      return play('clash');
+    }
+    animate(cells[i], 'sdk-pop');
+    const done = completedUnits(i);
+    if (!done.length) return play('place');
+    // The flash spreads out from the cell just filled.
+    new Set(done.flat()).forEach(j => animate(cells[j], 'sdk-flash', distance(i, j) * 35));
+    play('unit');
+  }
+
+  function celebrate(from) {
+    cells.forEach((el, j) => animate(el, 'sdk-wave', distance(from, j) * 30));
+    play('solved');
+  }
+
+  // A new puzzle's numbers ripple in from the top-left corner.
+  function rippleIn() {
+    cells.forEach((el, j) => {
+      if (game.values[j] >= 0) animate(el, 'sdk-pop', (geo.row[j] + geo.col[j]) * 14);
+    });
+  }
+
+  function undo() {
+    const move = history.pop();
+    if (!move || isSolved()) return;
+    move.forEach(({ i, value, notes }) => { game.values[i] = value; game.notes[i] = notes; });
+    selected = move[0].i;
+    afterMove();
+  }
+
+  function check() {
+    wrong = new Set(game.values
+      .map((v, i) => (v >= 0 && game.puzzle[i] < 0 && v !== game.solution[i] ? i : -1))
+      .filter(i => i >= 0));
+    renderBoard();
+    if (isSolved()) return;
+    setStatus(wrong.size ? `${wrong.size} wrong, shown in red.` : 'No mistakes so far.');
+  }
+
+  // ── Starting ──
+
+  function contentWidth() {
+    const style = getComputedStyle(dialog);
+    return dialog.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight) - BOARD_BORDER_PX;
+  }
+
+  // The saved game if there is one, else a new puzzle.
+  function start() {
+    geo = geometry(level);
+    const saved = loadGame(level, geo);
+    if (saved) showGame(saved);
+    else newGame();
+  }
+
+  function newGame() {
+    if (busy) return;
+    busy = true;
+    resetConfirm();
+    setStatus('Making a puzzle…');
+    // Let the message paint first: proving the puzzle unique takes a moment.
+    setTimeout(() => {
+      try {
+        const fresh = makePuzzle(level, geo);
+        showGame(fresh);
+        saveGame();
+        rippleIn();
+        play('start');
+      } finally {
+        busy = false;
+      }
+    }, 30);
+  }
+
+  function showGame(g) {
+    game = g;
+    history = [];
+    wrong.clear();
+    selected = firstEmpty();
+    buildBoard();
+    sizeBoard();
+    renderBoard();
+    cells[selected].focus();
+    setStatus(isSolved() ? 'Solved! Well done.' : '', isSolved());
+  }
+
+  // ── Rendering ──
+
+  function buildBoard() {
+    const { n, row, col } = geo;
+    board.style.setProperty('--n', n);
+    board.style.setProperty('--note-cols', level.boxCols);
+    board.setAttribute('aria-label', `Sudoku board, ${n} by ${n}`);
+    cells = range(n * n).map(i => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'sdk-cell';
+      b.dataset.cell = i;
+      if (col[i] === n - 1) b.classList.add('sdk-edge-r');
+      else if (col[i] % level.boxCols === level.boxCols - 1) b.classList.add('sdk-box-r');
+      if (row[i] === n - 1) b.classList.add('sdk-edge-b');
+      else if (row[i] % level.boxRows === level.boxRows - 1) b.classList.add('sdk-box-b');
+      return b;
+    });
+    board.replaceChildren(...cells);
+
+    pad.style.setProperty('--pad-cols', n <= 9 ? n : n / 2);
+    pad.replaceChildren(...range(n).map(k => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'btn sdk-key';
+      b.dataset.sym = k;
+      b.textContent = SYMBOLS[k];
+      return b;
+    }));
+  }
+
+  // Cells as large as the screen allows, never below MIN_CELL_PX (the dialog
+  // scrolls instead, e.g. a phone held sideways).
+  function sizeBoard() {
+    if (!geo || !dialog.open) return;
+    // Height of everything but the board, from the content itself: on a phone
+    // the dialog is full height, so its own height says nothing.
+    const style = getComputedStyle(dialog);
+    const top = dialog.firstElementChild.getBoundingClientRect().top;
+    const bottom = dialog.lastElementChild.getBoundingClientRect().bottom;
+    const others = bottom - top + parseFloat(style.paddingTop) + parseFloat(style.paddingBottom) - board.offsetHeight;
+    const height = window.innerHeight - DIALOG_MARGIN_PX - others - BOARD_BORDER_PX;
+    const cell = Math.floor(Math.min(contentWidth() / geo.n, height / geo.n, MAX_CELL_PX));
+    board.style.setProperty('--cell', `${Math.max(cell, MIN_CELL_PX)}px`);
+  }
+
+  function renderBoard() {
+    const { n, row, col, box } = geo;
+    const selValue = selected >= 0 ? game.values[selected] : -1;
+    const clashes = conflicts();
+    cells.forEach((el, i) => {
+      const v = game.values[i];
+      const given = game.puzzle[i] >= 0;
+      const peer = selected >= 0 && i !== selected &&
+        (row[i] === row[selected] || col[i] === col[selected] || box[i] === box[selected]);
+      el.classList.toggle('sdk-given', given);
+      el.classList.toggle('sdk-selected', i === selected);
+      el.classList.toggle('sdk-peer', peer);
+      el.classList.toggle('sdk-same', selValue >= 0 && i !== selected && v === selValue);
+      el.classList.toggle('sdk-conflict', clashes.has(i) || wrong.has(i));
+      el.tabIndex = i === selected ? 0 : -1;
+
+      // Rebuild the content only when it changes: a new element would restart
+      // a pop or shake that is still playing.
+      const key = `${v}|${game.notes[i]}`;
+      if (el.dataset.key !== key) {
+        el.dataset.key = key;
+        el.replaceChildren(...cellContent(v, game.notes[i], n));
+      }
+      const content = v >= 0 ? SYMBOLS[v] : 'empty';
+      el.setAttribute('aria-label', `Row ${row[i] + 1}, column ${col[i] + 1}: ${content}${given ? ', given' : ''}`);
+    });
+  }
+
+  // A cell's number, or its notes laid out like a small box, or nothing.
+  function cellContent(v, notes, n) {
+    if (v >= 0) {
+      const value = document.createElement('span');
+      value.className = 'sdk-val';
+      value.textContent = SYMBOLS[v];
+      return [value];
+    }
+    if (!notes) return [];
+    const marks = document.createElement('span');
+    marks.className = 'sdk-notes';
+    for (let k = 0; k < n; k++) {
+      const s = document.createElement('span');
+      s.textContent = notes & (1 << k) ? SYMBOLS[k] : '';
+      marks.appendChild(s);
+    }
+    return [marks];
+  }
+
+  function setStatus(text, solved = false) {
+    statusEl.textContent = text;
+    statusEl.classList.toggle('sdk-solved', solved);
+  }
+
+  function select(i, focus) {
+    selected = i;
+    renderBoard();
+    if (focus) cells[i].focus();
+  }
+
+  function setNotesMode(on) {
+    notesMode = on;
+    notesBtn.setAttribute('aria-pressed', String(on));
+  }
+
+  function resetConfirm() {
+    clearTimeout(confirmTimer);
+    newBtn.textContent = 'New game';
+    delete newBtn.dataset.confirm;
+  }
+
+  // Unfinished work goes only on a second tap.
+  function askNewGame() {
+    if (!hasProgress() || newBtn.dataset.confirm) return newGame();
+    newBtn.dataset.confirm = '1';
+    newBtn.textContent = 'Tap again to start over';
+    confirmTimer = setTimeout(resetConfirm, CONFIRM_MS);
+  }
+
+  // ── Events ──
+
+  function onClick(e) {
+    const t = e.target.closest('button');
+    if (!t) return;
+    if (t.dataset.act === 'close') return dialog.close();
+    if (t.dataset.act === 'sound') return setSound(!soundOn);
+    if (!game) return;
+    if (t.dataset.cell !== undefined) return select(Number(t.dataset.cell), true);
+    if (t.dataset.sym !== undefined) return enter(Number(t.dataset.sym));
+    const actions = {
+      notes: () => setNotesMode(!notesMode),
+      undo,
+      erase,
+      check,
+      new: askNewGame,
+    };
+    actions[t.dataset.act]?.();
+  }
+
+  function onBoardKey(e) {
+    if (!game || selected < 0) return;
+    const n = geo.n;
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') { e.preventDefault(); return undo(); }
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
+    const r = geo.row[selected], c = geo.col[selected];
+    const moves = {
+      ArrowUp: r > 0 ? -n : 0,
+      ArrowDown: r < n - 1 ? n : 0,
+      ArrowLeft: c > 0 ? -1 : 0,
+      ArrowRight: c < n - 1 ? 1 : 0,
+    };
+    if (e.key in moves) {
+      e.preventDefault();
+      if (moves[e.key]) select(selected + moves[e.key], true);
+      return;
+    }
+    if (e.key === 'Backspace' || e.key === 'Delete') { e.preventDefault(); return erase(); }
+    if (e.key.toLowerCase() === 'n') return setNotesMode(!notesMode);
+    const symbol = SYMBOLS.indexOf(e.key.toUpperCase());
+    if (e.key.length === 1 && symbol >= 0 && symbol < n) { e.preventDefault(); enter(symbol); }
+  }
+
+  function buildUi() {
+    dialog = document.createElement('dialog');
+    dialog.className = 'sdk';
+    dialog.setAttribute('aria-labelledby', 'sdkTitle');
+    dialog.innerHTML = `
+      <div class="sdk-head">
+        <h2 id="sdkTitle">Sudoku</h2>
+        <span class="sdk-head-tools">
+          <button type="button" class="sound-toggle" data-act="sound" aria-pressed="false" aria-label="Sound on" role="switch">
+            <span>Sound</span>
+            <span class="sound-toggle-track" aria-hidden="true">
+              <span class="sound-toggle-thumb"></span>
+            </span>
+          </button>
+          <button type="button" class="btn btn-sm btn-ghost" data-act="close">Close</button>
+        </span>
+      </div>
+      <div class="sdk-play">
+        <div class="sdk-board" role="group"></div>
+        <p class="sdk-status" role="status"></p>
+        <div class="sdk-pad" role="group" aria-label="Numbers"></div>
+        <div class="sdk-tools">
+          <button type="button" class="btn btn-sm" data-act="notes" aria-pressed="false">Notes</button>
+          <button type="button" class="btn btn-sm" data-act="undo">Undo</button>
+          <button type="button" class="btn btn-sm" data-act="erase">Erase</button>
+          <button type="button" class="btn btn-sm" data-act="check">Check</button>
+          <button type="button" class="btn btn-sm" data-act="new">New game</button>
+        </div>
+      </div>`;
+    document.body.appendChild(dialog);
+    board = dialog.querySelector('.sdk-board');
+    pad = dialog.querySelector('.sdk-pad');
+    statusEl = dialog.querySelector('.sdk-status');
+    notesBtn = dialog.querySelector('[data-act="notes"]');
+    newBtn = dialog.querySelector('[data-act="new"]');
+    soundBtn = dialog.querySelector('[data-act="sound"]');
+    if (STANDALONE) dialog.querySelector('[data-act="close"]').remove();
+    setSound(soundOn);
+    dialog.addEventListener('click', onClick);
+    board.addEventListener('keydown', onBoardKey);
+    dialog.addEventListener('close', () => window.removeEventListener('resize', sizeBoard));
+  }
+
+  function openSudoku() {
+    if (!dialog) buildUi();
+    // Standalone, nothing sits behind it, so it opens non-modal: Esc can't close it.
+    if (STANDALONE) dialog.show();
+    else dialog.showModal();
+    window.addEventListener('resize', sizeBoard);
+    if (soundOn) startAmbientLoop();
+    if (!game) return start();
+    sizeBoard();
+    cells[selected]?.focus();
+  }
+
+  if (STANDALONE) return openSudoku();
+
+  const trigger = document.getElementById('appBuild');
+  if (!trigger) return;
+  let taps = 0;
+  let lastTap = 0;
+  trigger.addEventListener('click', () => {
+    const now = Date.now();
+    taps = now - lastTap > TAP_GAP_MS ? 1 : taps + 1;
+    lastTap = now;
+    if (taps < TAPS_TO_OPEN) return;
+    taps = 0;
+    openSudoku();
+  });
+})();
+
+</script>
+</body>
+</html>
