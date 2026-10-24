@@ -209,6 +209,7 @@ body:has(.sdk[open]) { overflow: hidden; }
 .sdk-cell.sdk-same { background: var(--green-tint); }
 .sdk-cell.sdk-conflict { background: var(--error-bg); color: var(--error); }
 .sdk-cell.sdk-selected { background: var(--green); color: var(--ink); box-shadow: inset 0 0 0 2px rgba(24, 36, 26, 0.22); }
+.sdk-cell.sdk-selected.sdk-conflict { background: var(--error-bg); color: var(--error); box-shadow: inset 0 0 0 2px var(--error); }
 .sdk-cell.sdk-hint-unit { background: var(--green-tint); }
 .sdk-cell.sdk-hint-target { background: var(--green); color: var(--ink); box-shadow: inset 0 0 0 3px var(--green-text); }
 .sdk-cell.sdk-hint-blocker { box-shadow: inset 0 0 0 2px var(--green-text); }
