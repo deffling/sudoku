@@ -219,6 +219,12 @@ body:has(.sdk[open]) { overflow: hidden; }
 }
 .sdk-pad { display: grid; grid-template-columns: repeat(var(--pad-cols), minmax(0, 1fr)); gap: var(--s1); }
 .sdk-key { padding: 0; font-size: 1.05rem; }
+.sdk-key.is-guide {
+  background: var(--green);
+  border-color: var(--ink);
+  color: var(--ink);
+  box-shadow: inset 0 0 0 1px rgba(17, 17, 17, 0.08);
+}
 
 /* Delight: one-shot animations, restarted by sudoku.js. */
 .sdk-pop > .sdk-val { animation: sdk-pop 220ms var(--ease-out) var(--sdk-delay, 0ms) backwards; }
@@ -349,7 +355,7 @@ body:has(.sdk[open]) { overflow: hidden; }
   let eraseHoldStart = 0;
   let eraseHoldBtn = null;
   let guideMode = false;
-  let guideTimer = 0;
+  let guideHintTimer = 0;
   let currentLang = storeGet('lang') || 'en';
 
   function t(key, params = {}) {
@@ -572,6 +578,28 @@ body:has(.sdk[open]) { overflow: hidden; }
     return indices.map(i => ({ i, value: game.values[i], notes: game.notes[i] }));
   }
 
+  function clearGuideHintTimer() {
+    if (guideHintTimer) {
+      clearTimeout(guideHintTimer);
+      guideHintTimer = 0;
+    }
+  }
+
+  function scheduleGuideHint() {
+    clearGuideHintTimer();
+    if (!guideMode) return;
+    guideHintTimer = setTimeout(() => {
+      guideHintTimer = 0;
+      if (!guideMode) return;
+      const hint = findNextHint(true);
+      if (!hint) return;
+      selected = hint.index;
+      renderBoard();
+      cells[hint.index]?.focus();
+      setGuideKeyHighlight(hint.value);
+    }, 10000);
+  }
+
   function afterMove() {
     wrong.clear();
     saveGame();
@@ -579,8 +607,9 @@ body:has(.sdk[open]) { overflow: hidden; }
     if (isSolved()) {
       storeRemove(level.id);
       setStatus(t('solved'), true);
-    } else if (guideMode || (guideBtn && guideBtn.getAttribute('aria-pressed') === 'true')) {
-      setGuideMode(true);
+    } else if (guideMode) {
+      clearGuideHintTimer();
+      scheduleGuideHint();
     } else {
       setStatus('');
     }
@@ -589,6 +618,9 @@ body:has(.sdk[open]) { overflow: hidden; }
   function enter(symbol) {
     const i = selected;
     if (i < 0 || game.puzzle[i] >= 0 || isSolved()) return;
+    if (guideMode) {
+      setGuideKeyHighlight(undefined);
+    }
     if (notesMode) {
       if (game.values[i] >= 0) return;
       history.push(snapshot([i]));
@@ -642,6 +674,7 @@ body:has(.sdk[open]) { overflow: hidden; }
     erase:  [[392, 0, 0.07, 'triangle', 0.7]],
     clash:  [[196, 0, 0.16, 'square', 0.35], [185, 0.05, 0.16, 'square', 0.35]],
     unit:   [[523, 0, 0.12, 'sine'], [659, 0.07, 0.12, 'sine'], [784, 0.14, 0.2, 'sine']],
+    chime:  [[659.25, 0.00, 0.18, 'sine', 0.9], [783.99, 0.10, 0.18, 'triangle', 0.8], [1046.50, 0.20, 0.36, 'sine', 0.7]],
     check:  [[523, 0, 0.16, 'sine', 0.9], [659, 0.09, 0.16, 'sine', 0.9], [784, 0.18, 0.20, 'triangle', 0.9],
              [1047, 0.34, 0.36, 'sine', 0.8], [784, 0.52, 0.36, 'triangle', 0.7]],
     solved: [[523, 0, 0.15, 'sine'], [659, 0.1, 0.15, 'sine'], [784, 0.2, 0.15, 'sine'],
@@ -807,7 +840,9 @@ body:has(.sdk[open]) { overflow: hidden; }
     if (!done.length) return play('place');
     // The flash spreads out from the cell just filled.
     new Set(done.flat()).forEach(j => animate(cells[j], 'sdk-flash', distance(i, j) * 35));
-    play('unit');
+    const boxCompleted = done.some(unit => unit.every(j => geo.box[j] === geo.box[i]));
+    if (boxCompleted) play('chime');
+    else play('unit');
   }
 
   function celebrate(from) {
@@ -983,46 +1018,43 @@ body:has(.sdk[open]) { overflow: hidden; }
     return [marks];
   }
 
-  function clearGuideTimer() {
-    if (guideTimer) {
-      clearTimeout(guideTimer);
-      guideTimer = 0;
-    }
-  }
-
-  function scheduleGuideHint() {
-    clearGuideTimer();
-    if (!guideMode) return;
-    guideTimer = setTimeout(() => {
-      guideTimer = 0;
-      if (!guideMode) return;
-      const hint = findNextHint(true);
-      if (!hint) return;
-      selected = hint.index;
-      renderBoard();
-      cells[hint.index]?.focus();
-      scheduleGuideHint();
-    }, 10000);
+  function setGuideKeyHighlight(symbol) {
+    if (!pad) return;
+    const keys = pad.querySelectorAll('.sdk-key');
+    keys.forEach((button) => button.classList.remove('is-guide'));
+    if (symbol === undefined) return;
+    const highlighted = SYMBOLS.indexOf(String(symbol));
+    if (highlighted < 0) return;
+    const key = pad.querySelector(`.sdk-key[data-sym="${highlighted}"]`);
+    if (key) key.classList.add('is-guide');
   }
 
   function setGuideMode(on) {
     guideMode = on;
-    clearGuideTimer();
+    if (!on) {
+      clearGuideHintTimer();
+      setGuideKeyHighlight(undefined);
+      if (selected >= 0 && game && !game.puzzle[selected]) {
+        setStatus('');
+      }
+      if (guideBtn) {
+        guideBtn.setAttribute('aria-pressed', String(on));
+        guideBtn.classList.toggle('is-on', on);
+        guideBtn.textContent = t('guide');
+      }
+      return;
+    }
     if (guideBtn) {
       guideBtn.setAttribute('aria-pressed', String(on));
       guideBtn.classList.toggle('is-on', on);
       guideBtn.textContent = t('guide');
     }
-    if (on) {
-      const hint = findNextHint();
-      if (hint) {
-        selected = hint.index;
-        renderBoard();
-        cells[hint.index]?.focus();
-        scheduleGuideHint();
-      }
-    } else if (selected >= 0 && game && !game.puzzle[selected]) {
-      setStatus('');
+    const hint = findNextHint();
+    if (hint) {
+      selected = hint.index;
+      renderBoard();
+      cells[hint.index]?.focus();
+      setGuideKeyHighlight(hint.value);
     }
   }
 
@@ -1036,6 +1068,7 @@ body:has(.sdk[open]) { overflow: hidden; }
       const row = geo.row[preferred] + 1;
       const col = geo.col[preferred] + 1;
       setStatus(t('hint', { value, row, col }));
+      setGuideKeyHighlight(value);
       animate(cells[preferred], 'sdk-flash', 0);
       return { index: preferred, value, row, col };
     }
@@ -1065,6 +1098,7 @@ body:has(.sdk[open]) { overflow: hidden; }
     const row = geo.row[preferred] + 1;
     const col = geo.col[preferred] + 1;
     setStatus(t('hint', { value, row, col }));
+    setGuideKeyHighlight(value);
     animate(cells[preferred], 'sdk-flash', 0);
     return { index: preferred, value, row, col };
   }
