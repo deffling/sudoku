@@ -149,14 +149,15 @@ body:has(.sdk[open]) { overflow: hidden; }
 }
 .lang-label { font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif; font-size: 1.08rem; font-weight: 700; }
 .sdk-tools {
-  display: grid; grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: var(--s2); width: min(100%, 560px); justify-self: stretch;
+  display: grid; grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: var(--s2); width: min(100%, 620px); justify-self: stretch;
 }
 .sdk-tools .btn {
   width: 100%; justify-content: center; white-space: normal; text-align: center;
   line-height: 1.2; overflow-wrap: anywhere; font-size: 1rem; font-weight: 700;
 }
 .sdk .btn:not(.btn-ghost)[aria-pressed="true"] { background: var(--green); border-color: var(--ink); color: var(--ink); }
+.sdk .btn.is-on { background: var(--green); border-color: var(--ink); color: var(--ink); }
 .sound-toggle {
   appearance: none; border: none; background: transparent; padding: 0; display: inline-flex;
   align-items: center; gap: var(--s2); color: var(--ink); cursor: pointer; font: inherit;
@@ -236,13 +237,13 @@ body:has(.sdk[open]) { overflow: hidden; }
 @media (max-width: 767px) {
   .sdk {
     width: 100vw; height: auto; min-height: 100dvh; max-height: none; margin: 0;
-    border-radius: 0; padding: var(--s3) var(--s3) var(--s2);
+    border-radius: 0; padding: var(--s3) var(--s3) 0;
   }
   .sdk[open] { gap: var(--s2); }
   .sdk-head { gap: var(--s2); }
   .sdk-head h2 { font-size: 1rem; }
   .sdk-play { gap: var(--s2); }
-  .sdk-board { margin-top: 0; }
+  .sdk-board { margin-top: var(--s1); }
   .sdk-footer { padding-top: var(--s1); }
 }
 @media (pointer: coarse) {
@@ -289,12 +290,14 @@ body:has(.sdk[open]) { overflow: hidden; }
       undo: 'Undo',
       erase: 'Erase',
       check: 'Check',
+      guide: 'Guide',
       newGame: 'New game',
       startOver: 'Start over',
       build: 'Build',
       solved: 'Solved! Well done.',
       noMistakes: 'No mistakes so far.',
       wrong: '{n} wrong, shown in red.',
+      hint: 'Hint: try {value} in row {row}, column {col}.',
       makingPuzzle: 'Making a puzzle…',
       language: 'Language',
       languageName: 'English',
@@ -309,12 +312,14 @@ body:has(.sdk[open]) { overflow: hidden; }
       undo: '撤销',
       erase: '清除',
       check: '检查',
+      guide: '提示',
       newGame: '新游戏',
       startOver: '重新开始',
       build: '构建',
       solved: '已完成！很好。',
       noMistakes: '目前还没有错误。',
       wrong: '{n} 处错误，已标红。',
+      hint: '提示：在第 {row} 行，第 {col} 列试 {value}。',
       makingPuzzle: '正在生成题目…',
       language: '语言',
       languageName: '简体中文',
@@ -329,7 +334,7 @@ body:has(.sdk[open]) { overflow: hidden; }
   // there the game is the whole page, open from the start, with no Close.
   const STANDALONE = document.documentElement.hasAttribute('data-sudoku-standalone');
 
-  let dialog, board, pad, statusEl, notesBtn, newBtn, soundBtn, langSelect, buildLabel;
+  let dialog, board, pad, statusEl, notesBtn, newBtn, soundBtn, langSelect, buildLabel, guideBtn;
   let cells = [];
   const level = LEVEL;
   let geo = null;
@@ -343,6 +348,7 @@ body:has(.sdk[open]) { overflow: hidden; }
   let eraseHoldFrame = 0;
   let eraseHoldStart = 0;
   let eraseHoldBtn = null;
+  let guideMode = false;
   let currentLang = storeGet('lang') || 'en';
 
   function t(key, params = {}) {
@@ -375,6 +381,10 @@ body:has(.sdk[open]) { overflow: hidden; }
     if (undoBtn) undoBtn.textContent = t('undo');
     const checkBtn = dialog.querySelector('[data-act="check"]');
     if (checkBtn) checkBtn.textContent = t('check');
+    if (guideBtn) {
+      guideBtn.textContent = t('guide');
+      guideBtn.setAttribute('aria-pressed', String(guideMode));
+    }
     if (buildLabel) buildLabel.textContent = t('build');
     if (statusEl && statusEl.textContent) {
       const current = statusEl.textContent;
@@ -568,6 +578,8 @@ body:has(.sdk[open]) { overflow: hidden; }
     if (isSolved()) {
       storeRemove(level.id);
       setStatus(t('solved'), true);
+    } else if (guideMode || (guideBtn && guideBtn.getAttribute('aria-pressed') === 'true')) {
+      setGuideMode(true);
     } else {
       setStatus('');
     }
@@ -964,6 +976,38 @@ body:has(.sdk[open]) { overflow: hidden; }
     return [marks];
   }
 
+  function setGuideMode(on) {
+    guideMode = on;
+    if (guideBtn) {
+      guideBtn.setAttribute('aria-pressed', String(on));
+      guideBtn.classList.toggle('is-on', on);
+      guideBtn.textContent = t('guide');
+    }
+    if (on) {
+      const hint = findNextHint();
+      if (hint) {
+        selected = hint.index;
+        renderBoard();
+        cells[hint.index]?.focus();
+      }
+    } else if (selected >= 0 && game && !game.puzzle[selected]) {
+      setStatus('');
+    }
+  }
+
+  function findNextHint() {
+    if (!game || isSolved()) return null;
+    const open = range(game.values.length).filter(i => game.values[i] < 0 && game.puzzle[i] < 0);
+    if (!open.length) return null;
+    const preferred = open.find(i => i === selected) ?? open[0];
+    const value = game.solution[preferred];
+    const row = geo.row[preferred] + 1;
+    const col = geo.col[preferred] + 1;
+    setStatus(t('hint', { value, row, col }));
+    animate(cells[preferred], 'sdk-flash', 0);
+    return { index: preferred, value, row, col };
+  }
+
   function setStatus(text, solved = false) {
     statusEl.textContent = text;
     statusEl.classList.toggle('sdk-solved', solved);
@@ -1052,6 +1096,7 @@ body:has(.sdk[open]) { overflow: hidden; }
       notes: () => setNotesMode(!notesMode),
       undo,
       check,
+      guide: () => setGuideMode(!(guideBtn && guideBtn.getAttribute('aria-pressed') === 'true')),
       new: askNewGame,
     };
     actions[t.dataset.act]?.();
@@ -1113,6 +1158,7 @@ body:has(.sdk[open]) { overflow: hidden; }
           <button type="button" class="btn btn-sm" data-act="undo">${t('undo')}</button>
           <button type="button" class="btn btn-sm btn-erase" data-act="erase"><span>${t('erase')}</span></button>
           <button type="button" class="btn btn-sm" data-act="check">${t('check')}</button>
+          <button type="button" class="btn btn-sm" data-act="guide" aria-pressed="false">${t('guide')}</button>
           <button type="button" class="btn btn-sm" data-act="new">${t('newGame')}</button>
         </div>
         <footer class="sdk-footer"><span data-build-label>${t('build')}</span>: <span data-build-id>${BUILD_ID}</span></footer>
@@ -1124,6 +1170,7 @@ body:has(.sdk[open]) { overflow: hidden; }
     notesBtn = dialog.querySelector('[data-act="notes"]');
     newBtn = dialog.querySelector('[data-act="new"]');
     soundBtn = dialog.querySelector('[data-act="sound"]');
+    guideBtn = dialog.querySelector('[data-act="guide"]');
     langSelect = dialog.querySelector('[data-act="language"]');
     buildLabel = dialog.querySelector('[data-build-label]');
     const eraseBtn = dialog.querySelector('[data-act="erase"]');
