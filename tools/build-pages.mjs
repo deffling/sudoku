@@ -15,6 +15,7 @@ for (const file of ['index.html', 'manifest.webmanifest']) {
   await cp(path.join(root, file), path.join(output, file));
 }
 await cp(path.join(root, 'icons'), path.join(output, 'icons'), { recursive: true });
+await cp(path.join(root, 'assets'), path.join(output, 'assets'), { recursive: true });
 
 for (const file of ['sudoku.html', 'sw.js']) {
   const source = await readFile(path.join(root, file), 'utf8');

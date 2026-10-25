@@ -3,6 +3,7 @@ const SHELL_ASSETS = [
   './',
   './sudoku.html',
   './manifest.webmanifest',
+  './assets/kitchen-companion.png',
   './icons/favicon-48.png',
   './icons/icon-192.png',
   './icons/icon-512.png',

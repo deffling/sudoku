@@ -228,6 +228,46 @@ body:has(.sdk[open]) { overflow: hidden; }
   100% { transform: translateY(0) scale(1); box-shadow: inset 0 0 0 2px rgba(24, 36, 26, 0.22); }
 }
 .sdk-cell:focus-visible { outline: none; box-shadow: inset 0 0 0 2px var(--ink); }
+.sdk-companion {
+  position: relative; isolation: isolate; overflow: hidden;
+  width: min(100%, 620px); height: 96px; flex: 0 0 auto;
+  border: 1px solid #d7c5a2; border-radius: var(--radius-sm);
+  background: #f5e8c8; box-shadow: inset 0 -5px 0 rgba(138, 104, 66, 0.12);
+}
+.sdk-kitchen-backdrop, .sdk-companion-character { position: absolute; inset: 0 auto auto 0; }
+.sdk-kitchen-backdrop { z-index: -1; width: 100%; height: 100%; }
+.sdk-companion-character {
+  width: 90px; height: 100%; overflow: visible;
+  object-fit: cover; object-position: center;
+  image-rendering: pixelated;
+  animation: sdk-potter 5s steps(2, end) infinite;
+}
+.sdk-companion-speech {
+  position: absolute; inset: 9px 10px 9px 98px;
+  display: flex; align-items: center; justify-content: center;
+  padding: 5px 10px; border: 2px solid #514438; border-radius: 8px;
+  background: #fff9e9; color: #39332b; text-align: center;
+  font-size: 0.91rem; font-weight: 650; line-height: 1.25;
+  box-shadow: 2px 2px 0 rgba(81, 68, 56, 0.18);
+}
+.sdk-companion-speech::before, .sdk-companion-speech::after {
+  content: ""; position: absolute; top: 50%; width: 0; height: 0;
+  border-top: 8px solid transparent; border-bottom: 8px solid transparent;
+  transform: translateY(-50%);
+}
+.sdk-companion-speech::before {
+  left: -12px; border-right: 12px solid #514438;
+}
+.sdk-companion-speech::after {
+  left: -8px; border-right: 9px solid #fff9e9;
+}
+.sdk-companion[data-mood="celebrating"] .sdk-companion-speech::after { border-right-color: #f4f8cb; }
+.sdk-companion[data-mood="concerned"] .sdk-companion-speech::after { border-right-color: #fff0e7; }
+.sdk-companion[data-mood="helpful"] .sdk-companion-speech::after { border-right-color: #eef8df; }
+.sdk-companion[data-mood="celebrating"] .sdk-companion-speech { background: #f4f8cb; }
+.sdk-companion[data-mood="concerned"] .sdk-companion-speech { background: #fff0e7; }
+.sdk-companion[data-mood="helpful"] .sdk-companion-speech { background: #eef8df; }
+@keyframes sdk-potter { 0%, 15%, 85%, 100% { transform: translateX(0); } 45%, 60% { transform: translateX(3px); } }
 .sdk-notes {
   display: grid; grid-template-columns: repeat(var(--note-cols), 1fr); width: 100%; height: 100%;
   padding: 1px; color: var(--muted); font-weight: 500; line-height: 1;
@@ -262,6 +302,7 @@ body:has(.sdk[open]) { overflow: hidden; }
 @media (prefers-reduced-motion: reduce) {
   .sdk-pop > .sdk-val, .sdk-shake > .sdk-val, .sdk-wave { animation: none; }
   .sdk-flash { animation: sdk-flash 520ms step-end; }   /* a colour blink, no movement */
+  .sdk-companion-character { animation: none; }
 }
 
 @media (max-width: 767px) {
@@ -273,6 +314,9 @@ body:has(.sdk[open]) { overflow: hidden; }
   .sdk-head { gap: var(--s2); }
   .sdk-head h2 { font-size: 1rem; }
   .sdk-play { flex: 1; width: 100%; display: flex; flex-direction: column; gap: var(--s2); }
+  .sdk-companion { height: 82px; }
+  .sdk-companion-character { width: 80px; }
+  .sdk-companion-speech { inset: 7px 7px 7px 88px; padding: 4px 7px; font-size: 0.82rem; }
   .sdk-board { margin-top: var(--s1); }
   .sdk-footer { margin-top: auto; padding-top: var(--s1); }
 }
@@ -334,6 +378,13 @@ body:has(.sdk[open]) { overflow: hidden; }
       hintBox: 'Only place for {value} in box {unit} is row {row}, column {col}.',
       noHint: 'No direct deduction is available yet.',
       makingPuzzle: 'Making a puzzle…',
+      companionIdle: 'Let’s take it one square at a time. Tap Guide if you need a hint.',
+      companionWrong: 'A little mix-up! Check that row, column and box, then try again.',
+      companionRow: 'row {n}',
+      companionColumn: 'column {n}',
+      companionBox: 'quadrant {n}',
+      companionAnd: ' and ',
+      companionUnitPraise: 'Lovely work! {units} complete — you’re on a roll!',
       language: 'Language',
       languageName: 'English',
     },
@@ -361,6 +412,13 @@ body:has(.sdk[open]) { overflow: hidden; }
       hintBox: '第 {unit} 宫中，{value} 只能填在第 {row} 行第 {col} 列。',
       noHint: '目前还没有可以直接推导的数字。',
       makingPuzzle: '正在生成题目…',
+      companionIdle: '慢慢来，一格一格填。需要提示时，点“提示”就好。',
+      companionWrong: '有个小差错！检查一下对应的行、列和宫，再试试看。',
+      companionRow: '第 {n} 行',
+      companionColumn: '第 {n} 列',
+      companionBox: '第 {n} 宫',
+      companionAnd: '和',
+      companionUnitPraise: '做得真棒！{units}都完成了，继续加油！',
       language: '语言',
       languageName: '简体中文',
     },
@@ -374,7 +432,7 @@ body:has(.sdk[open]) { overflow: hidden; }
   // there the game is the whole page, open from the start, with no Close.
   const STANDALONE = document.documentElement.hasAttribute('data-sudoku-standalone');
 
-  let dialog, board, pad, statusEl, notesBtn, newBtn, soundBtn, langSelect, buildLabel, guideBtn;
+  let dialog, board, pad, statusEl, companionEl, companionSpeech, notesBtn, newBtn, soundBtn, langSelect, buildLabel, guideBtn;
   let cells = [];
   const level = LEVEL;
   let geo = null;
@@ -394,12 +452,27 @@ body:has(.sdk[open]) { overflow: hidden; }
   let guideMode = false;
   let guideHintTimer = 0;
   let hintVisual = null;
+  let statusMessage = null;
+  let statusMood = 'idle';
   let currentLang = storeGet('lang') || 'en';
 
   function t(key, params = {}) {
     const dict = I18N[currentLang] || I18N.en;
     const value = dict[key] || I18N.en[key] || key;
     return String(value).replace(/\{(\w+)\}/g, (_, name) => params[name] ?? `{${name}}`);
+  }
+
+  function renderMessage(message) {
+    if (message.key === 'hint') {
+      const reason = message.reason;
+      return t('hint', { reason: t(reason.key, reason.params) });
+    }
+    if (message.key === 'companionUnitPraise') {
+      const names = message.units.map(unit => t(unit.key, unit.params));
+      const units = names.length < 2 ? names[0] : `${names.slice(0, -1).join(', ')}${t('companionAnd')}${names[names.length - 1]}`;
+      return t('companionUnitPraise', { units });
+    }
+    return t(message.key, message.params);
   }
 
   function setLanguage(lang) {
@@ -431,13 +504,13 @@ body:has(.sdk[open]) { overflow: hidden; }
       guideBtn.setAttribute('aria-pressed', String(guideMode));
     }
     if (buildLabel) buildLabel.textContent = t('build');
-    if (statusEl && statusEl.textContent) {
-      const current = statusEl.textContent;
-      if (current === 'Solved! Well done.' || current === '已完成！很好。') setStatus(t('solved'), true);
-      else if (current === 'No mistakes so far.' || current === '目前还没有错误。') setStatus(t('noMistakes'));
-      else if (/\d+ wrong, shown in red\./.test(current) || /\d+ 处错误，已标红\./.test(current)) {
-        const n = (current.match(/\d+/) || ['0'])[0];
-        setStatus(t('wrong', { n }));
+    if (statusEl) {
+      const text = statusMessage ? renderMessage(statusMessage) : '';
+      statusEl.textContent = text;
+      statusEl.classList.toggle('sdk-solved', statusMood === 'celebrating' && statusMessage?.key === 'solved');
+      if (companionSpeech) {
+        companionSpeech.textContent = text || t('companionIdle');
+        companionEl.dataset.mood = statusMood;
       }
     }
     const langLabel = dialog.querySelector('.lang-label');
@@ -645,7 +718,7 @@ body:has(.sdk[open]) { overflow: hidden; }
     renderBoard();
     if (isSolved()) {
       storeRemove(level.id);
-      setStatus(t('solved'), true);
+      setStatus(t('solved'), true, 'celebrating', { key: 'solved' });
     } else if (guideMode) {
       clearGuideHintTimer();
       scheduleGuideHint();
@@ -891,13 +964,22 @@ body:has(.sdk[open]) { overflow: hidden; }
   function completedUnits(i) {
     const { n, row, col, box } = geo;
     const units = [
-      range(n * n).filter(j => row[j] === row[i]),
-      range(n * n).filter(j => col[j] === col[i]),
-      range(n * n).filter(j => box[j] === box[i]),
+      { type: 'companionRow', number: row[i] + 1, cells: range(n * n).filter(j => row[j] === row[i]) },
+      { type: 'companionColumn', number: col[i] + 1, cells: range(n * n).filter(j => col[j] === col[i]) },
+      { type: 'companionBox', number: box[i] + 1, cells: range(n * n).filter(j => box[j] === box[i]) },
     ];
-    return units.filter(unit => {
+    return units.filter(({ cells: unit }) => {
       const values = unit.map(j => game.values[j]);
       return values.every(v => v >= 0) && new Set(values).size === n;
+    });
+  }
+
+  function praiseCompletedUnits(units) {
+    const names = units.map(unit => t(unit.type, { n: unit.number }));
+    const joined = names.length < 2 ? names[0] : `${names.slice(0, -1).join(', ')}${t('companionAnd')}${names[names.length - 1]}`;
+    setStatus(t('companionUnitPraise', { units: joined }), false, 'celebrating', {
+      key: 'companionUnitPraise',
+      units: units.map(unit => ({ key: unit.type, params: { n: unit.number } })),
     });
   }
 
@@ -909,20 +991,23 @@ body:has(.sdk[open]) { overflow: hidden; }
     if (isSolved()) return celebrate(i);
     if (geo.peers[i].some(j => game.values[j] === symbol)) {
       animate(cells[i], 'sdk-shake');
+      setStatus(t('companionWrong'), false, 'concerned', { key: 'companionWrong' });
       return play('clash');
     }
     animate(cells[i], 'sdk-pop');
     const done = completedUnits(i);
     if (!done.length) return play('place');
     // The flash spreads out from the cell just filled.
-    new Set(done.flat()).forEach(j => animate(cells[j], 'sdk-flash', distance(i, j) * 35));
-    const boxCompleted = done.some(unit => unit.every(j => geo.box[j] === geo.box[i]));
+    new Set(done.flatMap(unit => unit.cells)).forEach(j => animate(cells[j], 'sdk-flash', distance(i, j) * 35));
+    const boxCompleted = done.some(unit => unit.type === 'companionBox');
+    praiseCompletedUnits(done);
     if (boxCompleted) play('chime');
     else play('unit');
   }
 
   function celebrate(from) {
     cells.forEach((el, j) => animate(el, 'sdk-wave', distance(from, j) * 30));
+    setStatus(t('solved'), true, 'celebrating', { key: 'solved' });
     play('solved');
   }
 
@@ -947,12 +1032,15 @@ body:has(.sdk[open]) { overflow: hidden; }
       .map((v, i) => (v >= 0 && game.puzzle[i] < 0 && v !== game.solution[i] ? i : -1))
       .filter(i => i >= 0));
     renderBoard();
-    if (isSolved()) return;
+    if (isSolved()) {
+      setStatus(t('solved'), true, 'celebrating', { key: 'solved' });
+      return;
+    }
     if (wrong.size) {
-      setStatus(t('wrong', { n: wrong.size }));
+      setStatus(t('wrong', { n: wrong.size }), false, 'concerned', { key: 'wrong', params: { n: wrong.size } });
       return play('clash');
     }
-    setStatus(t('noMistakes'));
+    setStatus(t('noMistakes'), false, 'celebrating', { key: 'noMistakes' });
     play('check');
   }
 
@@ -975,7 +1063,7 @@ body:has(.sdk[open]) { overflow: hidden; }
     if (busy) return;
     busy = true;
     resetConfirm();
-    setStatus(t('makingPuzzle'));
+    setStatus(t('makingPuzzle'), false, 'idle', { key: 'makingPuzzle' });
     // Let the message paint first: proving the puzzle unique takes a moment.
     setTimeout(() => {
       try {
@@ -1000,7 +1088,8 @@ body:has(.sdk[open]) { overflow: hidden; }
     sizeBoard();
     renderBoard();
     cells[selected].focus();
-    setStatus(isSolved() ? t('solved') : '', isSolved());
+    setStatus(isSolved() ? t('solved') : '', isSolved(), isSolved() ? 'celebrating' : 'idle',
+      isSolved() ? { key: 'solved' } : null);
   }
 
   // ── Rendering ──
@@ -1163,14 +1252,14 @@ body:has(.sdk[open]) { overflow: hidden; }
 
     const open = range(game.values.length).filter(i => game.values[i] < 0 && game.puzzle[i] < 0);
     if (!open.length) {
-      setStatus(t('noHint'));
+      setStatus(t('noHint'), false, 'idle', { key: 'noHint' });
       return null;
     }
 
     for (let i = 0; i < game.values.length; i++) {
       const value = game.values[i];
       if (value >= 0 && geo.peers[i].some(j => j < i && game.values[j] === value)) {
-        setStatus(t('noHint'));
+        setStatus(t('noHint'), false, 'idle', { key: 'noHint' });
         return null;
       }
     }
@@ -1185,7 +1274,7 @@ body:has(.sdk[open]) { overflow: hidden; }
       }
       options[i] = all & ~used;
       if (!options[i]) {
-        setStatus(t('noHint'));
+        setStatus(t('noHint'), false, 'idle', { key: 'noHint' });
         return null;
       }
     }
@@ -1222,7 +1311,7 @@ body:has(.sdk[open]) { overflow: hidden; }
           }))
           .sort((a, b) => b.score - a.score || a.type - b.type)[0];
         if (!addDeduction(i, value, bestUnit.score, bestUnit.type, { kind: 'cell' })) {
-          setStatus(t('noHint'));
+          setStatus(t('noHint'), false, 'idle', { key: 'noHint' });
           return null;
         }
       }
@@ -1234,12 +1323,12 @@ body:has(.sdk[open]) { overflow: hidden; }
         if (unit.cells.some(i => game.values[i] === value)) continue;
         const locations = unit.cells.filter(i => game.values[i] < 0 && (options[i] & (1 << value)));
         if (!locations.length) {
-          setStatus(t('noHint'));
+          setStatus(t('noHint'), false, 'idle', { key: 'noHint' });
           return null;
         }
         if (locations.length === 1 &&
             !addDeduction(locations[0], value, filled, unit.type, { kind: unit.type, index: unit.index, cells: unit.cells })) {
-          setStatus(t('noHint'));
+          setStatus(t('noHint'), false, 'idle', { key: 'noHint' });
           return null;
         }
       }
@@ -1249,7 +1338,7 @@ body:has(.sdk[open]) { overflow: hidden; }
     const candidates = skipSelected ? inferred.filter(hint => hint.i !== selected) : inferred;
     const source = candidates.length ? candidates : inferred;
     if (!source.length) {
-      setStatus(t('noHint'));
+      setStatus(t('noHint'), false, 'idle', { key: 'noHint' });
       return null;
     }
     source.sort((a, b) =>
@@ -1277,15 +1366,22 @@ body:has(.sdk[open]) { overflow: hidden; }
     const explanation = reason.kind === 'cell'
       ? t('hintCell', { value, row, col })
       : t(reasonKey, { value, row, col, unit: reason.index + 1 });
-    setStatus(t('hint', { reason: explanation }));
+    const reasonMessage = reason.kind === 'cell'
+      ? { key: 'hintCell', params: { value, row, col } }
+      : { key: reasonKey, params: { value, row, col, unit: reason.index + 1 } };
+    setStatus(t('hint', { reason: explanation }), false, 'helpful', { key: 'hint', reason: reasonMessage });
     setGuideKeyHighlight(value);
     animate(cells[preferred], 'sdk-flash', 0);
     return { index: preferred, value, row, col };
   }
 
-  function setStatus(text, solved = false) {
+  function setStatus(text, solved = false, mood = 'idle', message = null) {
+    statusMessage = message;
+    statusMood = mood;
     statusEl.textContent = text;
     statusEl.classList.toggle('sdk-solved', solved);
+    if (companionSpeech) companionSpeech.textContent = message ? renderMessage(message) : text || t('companionIdle');
+    if (companionEl) companionEl.dataset.mood = mood;
   }
 
   function select(i, focus) {
@@ -1485,6 +1581,28 @@ body:has(.sdk[open]) { overflow: hidden; }
         </span>
       </div>
       <div class="sdk-play">
+        <section class="sdk-companion" aria-label="Kitchen helper" data-mood="idle">
+          <svg class="sdk-kitchen-backdrop" viewBox="0 0 600 120" preserveAspectRatio="none" aria-hidden="true">
+            <rect width="600" height="120" fill="#f6e7c3"/>
+            <rect width="600" height="53" fill="#f8efcf"/>
+            <rect x="260" y="5" width="112" height="43" fill="#b9d9dc"/>
+            <path d="M316 5v43M260 27h112" stroke="#faf2d9" stroke-width="5"/>
+            <rect x="13" y="7" width="112" height="42" fill="#e9c995" stroke="#bc9b67" stroke-width="3"/>
+            <path d="M69 8v40" stroke="#bc9b67" stroke-width="3"/>
+            <rect x="421" y="7" width="155" height="42" fill="#e9c995" stroke="#bc9b67" stroke-width="3"/>
+            <path d="M498 8v40" stroke="#bc9b67" stroke-width="3"/>
+            <rect y="53" width="600" height="46" fill="#d6e6d2"/>
+            <path d="M0 76h600M150 53v46M300 53v46M450 53v46" stroke="#c1d5bf" stroke-width="2"/>
+            <rect y="96" width="600" height="24" fill="#9c7555"/>
+            <rect y="96" width="600" height="5" fill="#e0bc8c"/>
+            <rect x="507" y="65" width="50" height="27" fill="#6d7476"/>
+            <rect x="511" y="60" width="42" height="8" fill="#b7c2bd"/>
+            <rect x="516" y="54" width="32" height="7" fill="#f7f1e3"/>
+            <path d="M524 52c-6-7 5-8 0-15M539 52c-5-8 5-8 1-15" fill="none" stroke="#fffaf0" stroke-width="3"/>
+          </svg>
+          <img class="sdk-companion-character" src="./assets/kitchen-companion.png" alt="Pixel-art portrait of the smiling, silver-haired subject wearing glasses">
+          <p class="sdk-companion-speech" aria-hidden="true">${t('companionIdle')}</p>
+        </section>
         <div class="sdk-board" role="group"></div>
         <p class="sdk-status" role="status"></p>
         <div class="sdk-pad" role="group" aria-label="Numbers"></div>
@@ -1500,6 +1618,8 @@ body:has(.sdk[open]) { overflow: hidden; }
       </div>`;
     document.body.appendChild(dialog);
     board = dialog.querySelector('.sdk-board');
+    companionEl = dialog.querySelector('.sdk-companion');
+    companionSpeech = dialog.querySelector('.sdk-companion-speech');
     pad = dialog.querySelector('.sdk-pad');
     statusEl = dialog.querySelector('.sdk-status');
     notesBtn = dialog.querySelector('[data-act="notes"]');
