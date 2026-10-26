@@ -283,6 +283,9 @@ body:has(.sdk[open]) { overflow: hidden; }
 }
 .sdk-pad { display: grid; grid-template-columns: repeat(var(--pad-cols), minmax(0, 1fr)); gap: var(--s1); }
 .sdk-key { padding: 0; font-size: 1.05rem; }
+@media (hover: hover) and (pointer: fine) {
+  .sdk-key:hover:not(:disabled) { background: var(--green); border-color: var(--ink); color: var(--ink); }
+}
 .sdk-key.is-guide {
   background: var(--green);
   border-color: var(--ink);
@@ -438,6 +441,7 @@ body:has(.sdk[open]) { overflow: hidden; }
   let geo = null;
   let game = null;          // { puzzle, solution, values, notes }: one entry per cell
   let selected = -1;
+  let hoveredSymbol = -1;
   let notesMode = false;
   let history = [];         // undo: the cells as they were before each move
   let wrong = new Set();    // shown after Check, until the next move
@@ -1141,6 +1145,7 @@ body:has(.sdk[open]) { overflow: hidden; }
   function renderBoard() {
     const { n, row, col, box } = geo;
     const selValue = selected >= 0 ? game.values[selected] : -1;
+    const highlightValue = hoveredSymbol >= 0 ? hoveredSymbol : selValue;
     const clashes = conflicts();
     cells.forEach((el, i) => {
       const v = game.values[i];
@@ -1150,7 +1155,7 @@ body:has(.sdk[open]) { overflow: hidden; }
       el.classList.toggle('sdk-given', given);
       el.classList.toggle('sdk-selected', i === selected);
       el.classList.toggle('sdk-peer', peer);
-      el.classList.toggle('sdk-same', selValue >= 0 && i !== selected && v === selValue);
+      el.classList.toggle('sdk-same', highlightValue >= 0 && i !== selected && v === highlightValue);
       el.classList.toggle('sdk-conflict', clashes.has(i) || wrong.has(i));
       const hintCell = Boolean(hintVisual && hintVisual.cells.includes(i) && v < 0);
       el.classList.toggle('sdk-hint-unit', hintCell && i !== hintVisual.index);
@@ -1216,6 +1221,26 @@ body:has(.sdk[open]) { overflow: hidden; }
     if (highlighted < 0) return;
     const key = pad.querySelector(`.sdk-key[data-sym="${highlighted}"]`);
     if (key) key.classList.add('is-guide');
+  }
+
+  function onNumberPadPointer(event) {
+    if (event.pointerType !== 'mouse') return;
+    const key = event.target.closest('.sdk-key');
+    if (!key) return;
+    if (event.type === 'pointerout' && key.contains(event.relatedTarget)) return;
+    const symbol = event.type === 'pointerover' ? Number(key.dataset.sym) : -1;
+    if (hoveredSymbol === symbol) return;
+    hoveredSymbol = symbol;
+    if (game) updateNumberHighlights();
+  }
+
+  function updateNumberHighlights() {
+    const selectedValue = selected >= 0 ? game.values[selected] : -1;
+    const highlightValue = hoveredSymbol >= 0 ? hoveredSymbol : selectedValue;
+    cells.forEach((cell, i) => {
+      cell.classList.toggle('sdk-same',
+        highlightValue >= 0 && i !== selected && game.values[i] === highlightValue);
+    });
   }
 
   function setGuideMode(on) {
@@ -1661,6 +1686,8 @@ body:has(.sdk[open]) { overflow: hidden; }
     eraseBtn.addEventListener('pointerleave', onPointerHold);
     dialog.addEventListener('click', onClick);
     board.addEventListener('keydown', onBoardKey);
+    pad.addEventListener('pointerover', onNumberPadPointer);
+    pad.addEventListener('pointerout', onNumberPadPointer);
     dialog.addEventListener('close', () => window.removeEventListener('resize', sizeBoard));
   }
 
