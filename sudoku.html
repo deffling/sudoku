@@ -776,7 +776,21 @@ body:has(.sdk[open]) { overflow: hidden; }
   }
 
   function eraseSelected() {
-    if (!game || isSolved() || selected < 0 || game.puzzle[selected] >= 0) return;
+    if (!game || isSolved()) return;
+    if (wrong.size >= 2) {
+      const indices = [...wrong].filter(i => game.puzzle[i] < 0 && game.values[i] >= 0);
+      if (!indices.length) return;
+      history.push(snapshot(indices));
+      indices.forEach(i => {
+        game.values[i] = -1;
+        game.notes[i] = 0;
+      });
+      selected = indices[0];
+      afterMove();
+      play('erase');
+      return;
+    }
+    if (selected < 0 || game.puzzle[selected] >= 0) return;
     if (game.values[selected] < 0 && !game.notes[selected]) return;
     history.push(snapshot([selected]));
     game.values[selected] = -1;
