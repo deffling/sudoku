@@ -242,6 +242,11 @@ body:has(.sdk[open]) { overflow: hidden; }
   image-rendering: pixelated;
   animation: sdk-potter 5s steps(2, end) infinite;
 }
+.sdk-companion-blink {
+  position: absolute; left: 0; bottom: 0; width: 140px; height: auto;
+  opacity: 0; image-rendering: pixelated;
+  animation: sdk-potter 5s steps(2, end) infinite, sdk-blink 8s steps(1, end) infinite;
+}
 .sdk-companion-speech {
   position: absolute; inset: 16px 12px 44px 148px;
   display: flex; align-items: center; justify-content: center;
@@ -268,6 +273,7 @@ body:has(.sdk[open]) { overflow: hidden; }
 .sdk-companion[data-mood="concerned"] .sdk-companion-speech { background: #fff0e7; }
 .sdk-companion[data-mood="helpful"] .sdk-companion-speech { background: #eef8df; }
 @keyframes sdk-potter { 0%, 15%, 85%, 100% { transform: translateX(0); } 45%, 60% { transform: translateX(3px); } }
+@keyframes sdk-blink { 0%, 95%, 97%, 100% { opacity: 0; } 95.5%, 96.5% { opacity: 1; } }
 .sdk-notes {
   display: grid; grid-template-columns: repeat(var(--note-cols), 1fr); width: 100%; height: 100%;
   padding: 1px; color: var(--muted); font-weight: 500; line-height: 1;
@@ -306,6 +312,7 @@ body:has(.sdk[open]) { overflow: hidden; }
   .sdk-pop > .sdk-val, .sdk-shake > .sdk-val, .sdk-wave { animation: none; }
   .sdk-flash { animation: sdk-flash 520ms step-end; }   /* a colour blink, no movement */
   .sdk-companion-character { animation: none; }
+  .sdk-companion-blink { animation: none; }
 }
 
 @media (max-width: 767px) {
@@ -318,7 +325,7 @@ body:has(.sdk[open]) { overflow: hidden; }
   .sdk-head h2 { font-size: 1rem; }
   .sdk-play { flex: 1; width: 100%; display: flex; flex-direction: column; gap: var(--s2); }
   .sdk-companion { height: 136px; }
-  .sdk-companion-character { width: 112px; }
+  .sdk-companion-character, .sdk-companion-blink { width: 112px; }
   .sdk-companion-speech { inset: 12px 7px 36px 116px; padding: 4px 7px; font-size: 0.82rem; }
   .sdk-board { margin-top: var(--s1); }
   .sdk-footer { margin-top: auto; padding-top: var(--s1); }
@@ -1661,6 +1668,12 @@ body:has(.sdk[open]) { overflow: hidden; }
             <path d="M499 125c-6-9 6-8 1-17M519 125c-6-9 6-8 1-17M539 125c-6-9 6-8 1-17" fill="none" stroke="#fff9ec" stroke-width="3"/>
           </svg>
           <img class="sdk-companion-character" src="./assets/kitchen-companion.png" alt="Pixel-art portrait of the smiling, silver-haired subject wearing glasses">
+          <svg class="sdk-companion-blink" viewBox="0 0 768 768" aria-hidden="true">
+            <path d="M224 374h12v-5h18v-4h46v4h17v5h10v18h-8v8h-18v4h-47v-4h-18v-5h-10zM435 374h12v-5h18v-4h46v4h17v5h10v18h-8v8h-18v4h-47v-4h-18v-5h-10z" fill="#f7b986"/>
+            <path d="M232 390h14v-4h16v-4h20v-2h18v3h14v4h10v5h-12v-4h-15v-3h-14v3h-18v4h-17v4h-16zM443 390h14v-4h16v-4h20v-2h18v3h14v4h10v5h-12v-4h-15v-3h-14v3h-18v4h-17v4h-16z" fill="#71384a"/>
+            <path d="M246 402h14v3h20v2h27v-3h13v4h-14v4h-44v-4h-16zM457 402h14v3h20v2h27v-3h13v4h-14v4h-44v-4h-16z" fill="#e69a79"/>
+            <path d="M251 402h55v2h-55zM462 402h55v2h-55z" fill="#fbd0a7"/>
+          </svg>
           <p class="sdk-companion-speech" aria-hidden="true">${t('companionIdle')}</p>
         </section>
         <div class="sdk-board" role="group"></div>
