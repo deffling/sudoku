@@ -791,14 +791,14 @@ body:has(.sdk[open]) { overflow: hidden; }
   let ambientNodes = [];
   let ambientBus = null;
   let ambientDuckUntil = 0;
-  const SOUND_GAIN = 0.14;
-  const AMBIENT_GAIN = 0.2;
+  const SOUND_GAIN = 0.2;
+  const AMBIENT_GAIN = 0.45;
   const AMBIENT_DUCK_GAIN = 0.25;
   const SOUNDS = {
     place:  [[660, 0, 0.09, 'triangle']],
-    note:   [[990, 0, 0.05, 'sine', 0.5]],
+    note:   [[990, 0, 0.08, 'sine', 0.5]],
     erase:  [[392, 0, 0.07, 'triangle', 0.7]],
-    clash:  [[196, 0, 0.16, 'square', 0.35], [185, 0.05, 0.16, 'square', 0.35]],
+    clash:  [[196, 0, 0.16, 'triangle', 0.35], [185, 0.05, 0.18, 'triangle', 0.35]],
     unit:   [[523, 0, 0.12, 'sine'], [659, 0.07, 0.12, 'sine'], [784, 0.14, 0.2, 'sine']],
     chime:  [[659.25, 0.00, 0.18, 'sine', 0.9], [783.99, 0.10, 0.18, 'triangle', 0.8], [1046.50, 0.20, 0.36, 'sine', 0.7]],
     check:  [[523, 0, 0.16, 'sine', 0.9], [659, 0.09, 0.16, 'sine', 0.9], [784, 0.18, 0.20, 'triangle', 0.9],
@@ -876,7 +876,7 @@ body:has(.sdk[open]) { overflow: hidden; }
     playAmbientLoop();
     ambientLoop = setInterval(() => {
       if (soundOn) playAmbientLoop();
-    }, 22000);
+    }, 25000);
   }
 
   function stopAmbientLoop() {
