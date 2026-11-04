@@ -142,7 +142,7 @@ body:has(.sdk[open]) { overflow: hidden; }
 }
 .sdk[open] { display: flex; flex-direction: column; align-items: center; gap: var(--s3); }
 .sdk::backdrop { background: rgba(17, 17, 17, 0.5); }
-.sdk-head { align-self: stretch; display: flex; align-items: center; justify-content: space-between; gap: var(--s4); width: min(100%, var(--board-size, 620px)); }
+.sdk-head { align-self: center; display: flex; align-items: center; justify-content: space-between; gap: var(--s4); width: min(100%, var(--board-size, 620px)); }
 .sdk-head h2 { margin: 0; font: inherit; font-size: 1.08rem; font-weight: 700; }
 .sdk-head-tools { display: flex; gap: var(--s3); align-items: center; }
 .lang-select-wrap, .lang-select, .lang-label, .sdk-status, .sdk-footer { font: inherit; }
@@ -158,8 +158,8 @@ body:has(.sdk[open]) { overflow: hidden; }
   gap: var(--s2); width: min(100%, var(--board-size, 620px)); justify-self: center;
 }
 .sdk-tools .btn {
-  width: 100%; justify-content: center; white-space: nowrap; text-align: center;
-  line-height: 1.2; font-size: 1rem; font-weight: 700;
+  width: 100%; min-width: 0; padding-inline: 4px; justify-content: center; white-space: normal; text-align: center;
+  line-height: 1.2; overflow-wrap: anywhere; font-size: 1rem; font-weight: 700;
 }
 .sdk .btn:not(.btn-ghost)[aria-pressed="true"] { background: var(--green); border-color: var(--ink); color: var(--ink); }
 .sdk .btn.is-on { background: var(--green); border-color: var(--ink); color: var(--ink); }
