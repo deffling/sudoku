@@ -1886,12 +1886,18 @@ body:has(.sdk[open]) { overflow: hidden; }
   if (!trigger) return;
   let taps = 0;
   let lastTap = 0;
+  function forceReloadBuild() {
+    const url = new URL(location.href);
+    url.searchParams.set('buildReload', String(Date.now()));
+    url.searchParams.set('build', BUILD_ID);
+    location.assign(url.toString());
+  }
   trigger.addEventListener('click', () => {
     const now = Date.now();
     if (now - lastTap <= DOUBLE_TAP_MS) {
       taps += 1;
       if (taps === 2) {
-        location.reload();
+        forceReloadBuild();
         return;
       }
     } else {
