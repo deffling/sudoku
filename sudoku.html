@@ -254,6 +254,10 @@ body:has(.sdk[open]) { overflow: hidden; }
   background: #fff9e9; color: #39332b; text-align: center;
   font-size: clamp(1.05rem, 1.9vw, 1.65rem); font-weight: 700; line-height: 1.3;
   box-shadow: 2px 2px 0 rgba(81, 68, 56, 0.18);
+  opacity: 1; transition: opacity 150ms ease, background-color 150ms ease, transform 150ms ease;
+}
+.sdk-companion-speech.sdk-message-fade {
+  opacity: 0; transform: translateY(2px);
 }
 .sdk-companion-speech::before, .sdk-companion-speech::after {
   content: ""; position: absolute; top: 50%; width: 0; height: 0;
@@ -274,6 +278,22 @@ body:has(.sdk[open]) { overflow: hidden; }
 .sdk-companion[data-mood="helpful"] .sdk-companion-speech { background: #eef8df; }
 @keyframes sdk-potter { 0%, 15%, 85%, 100% { transform: translateX(0); } 45%, 60% { transform: translateX(3px); } }
 @keyframes sdk-blink { 0%, 95%, 97%, 100% { opacity: 0; } 95.5%, 96.5% { opacity: 1; } }
+@keyframes sdk-companion-nod {
+  0%, 100% { transform: translateY(0) rotate(0deg); }
+  25% { transform: translateY(-3px) rotate(-1.5deg); }
+  50% { transform: translateY(2px) rotate(2deg); }
+  75% { transform: translateY(-1px) rotate(-1deg); }
+}
+@keyframes sdk-companion-tilt {
+  0%, 100% { transform: rotate(0deg) translateY(0); }
+  20% { transform: rotate(-5deg) translateY(1px); }
+  50% { transform: rotate(5deg) translateY(-1px); }
+  80% { transform: rotate(-2deg) translateY(0); }
+}
+.sdk-companion-animate-nod .sdk-companion-character,
+.sdk-companion-animate-nod .sdk-companion-blink { animation: sdk-companion-nod 220ms ease-in-out; }
+.sdk-companion-animate-tilt .sdk-companion-character,
+.sdk-companion-animate-tilt .sdk-companion-blink { animation: sdk-companion-tilt 220ms ease-in-out; }
 .sdk-notes {
   display: grid; grid-template-columns: repeat(var(--note-cols), 1fr); width: 100%; height: 100%;
   padding: 1px; color: var(--muted); font-weight: 500; line-height: 1;
@@ -309,12 +329,20 @@ body:has(.sdk[open]) { overflow: hidden; }
 }
 
 /* Delight: one-shot animations, restarted by sudoku.js. */
-.sdk-pop > .sdk-val { animation: sdk-pop 220ms var(--ease-out) var(--sdk-delay, 0ms) backwards; }
-.sdk-shake > .sdk-val { animation: sdk-shake 300ms ease-in-out; }
-.sdk-flash { animation: sdk-flash 520ms ease-out var(--sdk-delay, 0ms); }
+.sdk-pop > .sdk-val { animation: sdk-pop 120ms var(--ease-out) var(--sdk-delay, 0ms) backwards; }
+.sdk-shake > .sdk-val { animation: sdk-shake 200ms ease-in-out; }
+.sdk-flash { animation: sdk-flash 260ms ease-out var(--sdk-delay, 0ms); }
 .sdk-wave { animation: sdk-wave 700ms var(--ease-out) var(--sdk-delay, 0ms); }
-@keyframes sdk-pop { from { transform: scale(0.4); opacity: 0; } }
-@keyframes sdk-shake { 20%, 60% { translate: -3px 0; } 40%, 80% { translate: 3px 0; } }
+@keyframes sdk-pop {
+  0% { transform: scale(0.9); opacity: 0.2; }
+  55% { transform: scale(1.1); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+@keyframes sdk-shake {
+  0%, 100% { transform: translateX(0); }
+  20%, 60% { transform: translateX(-3px); }
+  40%, 80% { transform: translateX(3px); }
+}
 @keyframes sdk-flash { 0%, 35% { background-color: var(--green); color: var(--ink); } }
 @keyframes sdk-wave { 40% { background-color: var(--green); color: var(--ink); transform: scale(0.9); } }
 @keyframes sdk-key-ripple {
@@ -322,10 +350,11 @@ body:has(.sdk[open]) { overflow: hidden; }
   100% { opacity: 0; transform: translate(-50%, -50%) scale(2.3); }
 }
 @media (prefers-reduced-motion: reduce) {
-  .sdk-pop > .sdk-val, .sdk-shake > .sdk-val, .sdk-wave { animation: none; }
-  .sdk-flash { animation: sdk-flash 520ms step-end; }   /* a colour blink, no movement */
-  .sdk-companion-character { animation: none; }
-  .sdk-companion-blink { animation: none; }
+  .sdk-pop > .sdk-val, .sdk-shake > .sdk-val, .sdk-wave, .sdk-flash, .sdk-focus-pulse, .sdk-companion-animate-nod, .sdk-companion-animate-tilt {
+    animation: none !important;
+  }
+  .sdk-companion-character, .sdk-companion-blink { animation: none !important; }
+  .sdk-companion-speech { transition: none; }
 }
 
 @media (max-width: 767px) {
@@ -1443,13 +1472,47 @@ body:has(.sdk[open]) { overflow: hidden; }
     return { index: preferred, value, row, col };
   }
 
+  function animateCompanionMood(mood) {
+    if (!companionEl) return;
+    const className = mood === 'concerned'
+      ? 'sdk-companion-animate-tilt'
+      : (mood === 'celebrating' || mood === 'helpful')
+        ? 'sdk-companion-animate-nod'
+        : null;
+    if (!className) {
+      companionEl.classList.remove('sdk-companion-animate-nod', 'sdk-companion-animate-tilt');
+      return;
+    }
+    companionEl.classList.remove('sdk-companion-animate-nod', 'sdk-companion-animate-tilt');
+    void companionEl.offsetWidth;
+    companionEl.classList.add(className);
+    companionEl.addEventListener('animationend', () => {
+      companionEl.classList.remove(className);
+    }, { once: true });
+  }
+
   function setStatus(text, solved = false, mood = 'idle', message = null) {
     statusMessage = message;
     statusMood = mood;
     statusEl.textContent = text;
     statusEl.classList.toggle('sdk-solved', solved);
-    if (companionSpeech) companionSpeech.textContent = message ? renderMessage(message) : text || t('companionIdle');
-    if (companionEl) companionEl.dataset.mood = mood;
+    if (companionSpeech) {
+      const next = message ? renderMessage(message) : text || t('companionIdle');
+      companionSpeech.classList.add('sdk-message-fade');
+      setTimeout(() => {
+        companionSpeech.textContent = next;
+        void companionSpeech.offsetWidth;
+        companionSpeech.classList.remove('sdk-message-fade');
+      }, 80);
+    }
+    if (companionEl) {
+      companionEl.dataset.mood = mood;
+      if (mood === 'celebrating' || mood === 'helpful' || mood === 'concerned') {
+        animateCompanionMood(mood);
+      } else {
+        animateCompanionMood('idle');
+      }
+    }
   }
 
   function select(i, focus) {
