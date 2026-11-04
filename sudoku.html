@@ -142,7 +142,7 @@ body:has(.sdk[open]) { overflow: hidden; }
 }
 .sdk[open] { display: flex; flex-direction: column; align-items: center; gap: var(--s3); }
 .sdk::backdrop { background: rgba(17, 17, 17, 0.5); }
-.sdk-head { align-self: stretch; display: flex; align-items: center; justify-content: space-between; gap: var(--s4); }
+.sdk-head { align-self: stretch; display: flex; align-items: center; justify-content: space-between; gap: var(--s4); width: min(100%, var(--board-size, 620px)); }
 .sdk-head h2 { margin: 0; font: inherit; font-size: 1.08rem; font-weight: 700; }
 .sdk-head-tools { display: flex; gap: var(--s3); align-items: center; }
 .lang-select-wrap, .lang-select, .lang-label, .sdk-status, .sdk-footer { font: inherit; }
@@ -155,11 +155,11 @@ body:has(.sdk[open]) { overflow: hidden; }
 .lang-label { font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif; font-size: 1.08rem; font-weight: 700; }
 .sdk-tools {
   display: grid; grid-template-columns: repeat(6, minmax(0, 1fr));
-  gap: var(--s2); width: min(100%, 620px); justify-self: center;
+  gap: var(--s2); width: min(100%, var(--board-size, 620px)); justify-self: center;
 }
 .sdk-tools .btn {
-  width: 100%; justify-content: center; white-space: normal; text-align: center;
-  line-height: 1.2; overflow-wrap: anywhere; font-size: 1rem; font-weight: 700;
+  width: 100%; justify-content: center; white-space: nowrap; text-align: center;
+  line-height: 1.2; font-size: 1rem; font-weight: 700;
 }
 .sdk .btn:not(.btn-ghost)[aria-pressed="true"] { background: var(--green); border-color: var(--ink); color: var(--ink); }
 .sdk .btn.is-on { background: var(--green); border-color: var(--ink); color: var(--ink); }
@@ -230,7 +230,7 @@ body:has(.sdk[open]) { overflow: hidden; }
 .sdk-cell:focus-visible { outline: none; box-shadow: inset 0 0 0 2px var(--ink); }
 .sdk-companion {
   position: relative; isolation: isolate; overflow: hidden;
-  width: min(100%, 620px); height: 156px; flex: 0 0 auto;
+  width: min(100%, var(--board-size, 620px)); height: 156px; flex: 0 0 auto;
   border: 1px solid #d7c5a2; border-radius: var(--radius-sm);
   background: #f5e8c8; box-shadow: inset 0 -5px 0 rgba(138, 104, 66, 0.12);
 }
@@ -1201,11 +1201,24 @@ body:has(.sdk[open]) { overflow: hidden; }
   // puzzle reloads until the browser is actually resized.
   function sizeBoard() {
     if (!geo || !dialog.open) return;
-    const style = getComputedStyle(dialog);
+    const dialogStyle = getComputedStyle(dialog);
+    const play = dialog.querySelector('.sdk-play');
+    const companion = dialog.querySelector('.sdk-companion');
+    const status = dialog.querySelector('.sdk-status');
+    const footer = dialog.querySelector('.sdk-footer');
+    const tools = dialog.querySelector('.sdk-tools');
+    const header = dialog.querySelector('.sdk-head');
+    const gap = parseFloat(dialogStyle.gap || '0');
+    const otherHeight = [header, companion, status, pad, tools, footer]
+      .filter(Boolean)
+      .reduce((sum, el) => sum + el.offsetHeight, 0) + gap * 5;
     const availableWidth = contentWidth();
-    const availableHeight = window.innerHeight - DIALOG_MARGIN_PX
-      - parseFloat(style.paddingTop) - parseFloat(style.paddingBottom)
-      - BOARD_BORDER_PX;
+    const availableHeight = Math.max(
+      MIN_CELL_PX * geo.n,
+      window.innerHeight - DIALOG_MARGIN_PX
+      - parseFloat(dialogStyle.paddingTop) - parseFloat(dialogStyle.paddingBottom)
+      - otherHeight
+    );
     const cell = Math.max(MIN_CELL_PX, Math.floor(Math.min(availableWidth / geo.n, availableHeight / geo.n, MAX_CELL_PX)));
     const boardSize = cell * geo.n + BOARD_BORDER_PX * 2;
     const nextValue = `${cell}px`;
@@ -1213,7 +1226,11 @@ body:has(.sdk[open]) { overflow: hidden; }
     board.style.setProperty('--cell', nextValue);
     board.style.width = `${boardSize}px`;
     board.style.height = `${boardSize}px`;
+    board.style.setProperty('--board-size', `${boardSize}px`);
     pad.style.width = `${boardSize}px`;
+    if (tools) tools.style.width = `${boardSize}px`;
+    if (header) header.style.width = `${boardSize}px`;
+    if (companion) companion.style.width = `${boardSize}px`;
   }
 
   function renderBoard() {
