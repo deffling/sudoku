@@ -402,6 +402,7 @@ body:has(.sdk[open]) { overflow: hidden; }
   const DIALOG_MARGIN_PX = 32;     // room kept above and below the dialog
   const TAPS_TO_OPEN = 5;
   const TAP_GAP_MS = 800;          // taps further apart start the count again
+  const DOUBLE_TAP_MS = 300;       // a quick double tap reloads the page
   const CONFIRM_MS = 3000;         // how long "Tap again to start over" waits
   const ERASE_HOLD_MS = 2000;      // hold the erase button for 2s before deleting a value
   const BUILD_ID = '@@BUILD_ID@@'.startsWith('@@') ? 'local' : '@@BUILD_ID@@'.slice(0, 7);
@@ -1870,7 +1871,15 @@ body:has(.sdk[open]) { overflow: hidden; }
   let lastTap = 0;
   trigger.addEventListener('click', () => {
     const now = Date.now();
-    taps = now - lastTap > TAP_GAP_MS ? 1 : taps + 1;
+    if (now - lastTap <= DOUBLE_TAP_MS) {
+      taps += 1;
+      if (taps === 2) {
+        location.reload();
+        return;
+      }
+    } else {
+      taps = 1;
+    }
     lastTap = now;
     if (taps < TAPS_TO_OPEN) return;
     taps = 0;
