@@ -1255,6 +1255,7 @@ body:has(.sdk[open]) { overflow: hidden; }
       .map((v, i) => (v >= 0 && game.puzzle[i] < 0 && v !== game.solution[i] ? i : -1))
       .filter(i => i >= 0));
     renderBoard();
+    cells[selected]?.focus();
     if (isSolved()) {
       finishGame();
       setStatus(t('solved'), true, 'celebrating', { key: 'solved' });
