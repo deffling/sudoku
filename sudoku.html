@@ -796,7 +796,7 @@ body:has(.sdk[open]) { overflow: hidden; }
   }
 
   function resumeClock() {
-    if (game && !isSolved() && !runStart && dialog && dialog.open && !document.hidden) runStart = Date.now();
+    if (game && !isSolved() && !runStart && dialog && dialog.open && !document.hidden && document.hasFocus()) runStart = Date.now();
   }
 
   function formatTime(ms) {
@@ -2105,6 +2105,8 @@ body:has(.sdk[open]) { overflow: hidden; }
     document.addEventListener('visibilitychange', () => {
       if (document.hidden) { pauseClock(); saveGame(); } else resumeClock();
     });
+    window.addEventListener('blur', () => { pauseClock(); saveGame(); });
+    window.addEventListener('focus', resumeClock);
     window.addEventListener('pagehide', () => { pauseClock(); saveGame(); });
   }
 
