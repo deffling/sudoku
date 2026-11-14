@@ -1913,6 +1913,10 @@ body:has(.sdk[open]) { overflow: hidden; }
 
   function onBoardKey(e) {
     if (!game || selected < 0) return;
+    const target = e.target;
+    const isCell = target instanceof Element && target.closest('.sdk-cell');
+    if (!isCell && !e.key.startsWith('Arrow')) return;
+    if (target instanceof Element && target.closest('select, input, textarea, [contenteditable="true"]')) return;
     const n = geo.n;
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') { e.preventDefault(); return undo(); }
     if (e.ctrlKey || e.metaKey || e.altKey) return;
@@ -2088,7 +2092,7 @@ body:has(.sdk[open]) { overflow: hidden; }
     eraseBtn.addEventListener('pointercancel', onPointerHold);
     eraseBtn.addEventListener('pointerleave', onPointerHold);
     dialog.addEventListener('click', onClick);
-    board.addEventListener('keydown', onBoardKey);
+    dialog.addEventListener('keydown', onBoardKey);
     pad.addEventListener('pointerover', onNumberPadPointer);
     pad.addEventListener('pointerout', onNumberPadPointer);
     dialog.addEventListener('close', () => {
