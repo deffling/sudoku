@@ -544,6 +544,7 @@ body:has(.sdk[open]) { overflow: hidden; }
   const STANDALONE = document.documentElement.hasAttribute('data-sudoku-standalone');
 
   let dialog, board, pad, statusEl, companionEl, companionSpeech, notesBtn, newBtn, soundBtn, langSelect, buildLabel, guideBtn;
+  let gameActionButtons = [];
   let cells = [];
   const level = LEVEL;
   let geo = null;
@@ -1440,6 +1441,7 @@ body:has(.sdk[open]) { overflow: hidden; }
 
   function renderBoard() {
     const { n, row, col, box } = geo;
+    const solved = isSolved();
     const selValue = selected >= 0 ? game.values[selected] : -1;
     const highlightValue = hoveredSymbol >= 0 ? hoveredSymbol : selValue;
     const clashes = conflicts();
@@ -1470,6 +1472,7 @@ body:has(.sdk[open]) { overflow: hidden; }
       const content = v >= 0 ? SYMBOLS[v] : 'empty';
       el.setAttribute('aria-label', `Row ${row[i] + 1}, column ${col[i] + 1}: ${content}${given ? ', given' : ''}`);
     });
+    gameActionButtons.forEach(button => { button.disabled = solved; });
     if (selected >= 0) pulseSelectedCell();
     updatePad();
     renderMeta();
@@ -2079,6 +2082,9 @@ body:has(.sdk[open]) { overflow: hidden; }
     newBtn = dialog.querySelector('[data-act="new"]');
     soundBtn = dialog.querySelector('[data-act="sound"]');
     guideBtn = dialog.querySelector('[data-act="guide"]');
+    gameActionButtons = [...dialog.querySelectorAll(
+      '[data-act="undo"], [data-act="erase"], [data-act="notes"], [data-act="check"], [data-act="guide"]'
+    )];
     langSelect = dialog.querySelector('[data-act="language"]');
     buildLabel = dialog.querySelector('[data-build-label]');
     const eraseBtn = dialog.querySelector('[data-act="erase"]');
