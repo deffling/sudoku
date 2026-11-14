@@ -129,8 +129,8 @@ code { font-family: var(--mono); }
 }
 
 
-/* ── Sudoku (sudoku.js): hidden; five taps on the build number open it.
-      sudoku.js sets --n, --cell and --note-cols on the board, --pad-cols on
+/* ── Sudoku game UI.
+      The game script sets --n, --cell and --note-cols on the board, --pad-cols on
       the number pad and --sdk-delay on an animating cell. ── */
 #appBuild { touch-action: manipulation; }   /* quick taps must not zoom the page */
 body:has(.sdk[open]) { overflow: hidden; }
