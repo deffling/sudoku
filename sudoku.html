@@ -159,7 +159,8 @@ body:has(.sdk[open]) { overflow: hidden; }
 }
 .sdk-tools .btn {
   width: 100%; min-width: 0; padding-inline: 4px; justify-content: center; white-space: normal; text-align: center;
-  line-height: 1.2; overflow-wrap: anywhere; font-size: 1rem; font-weight: 700;
+  line-height: 1.2; overflow-wrap: normal; font-weight: 700;
+  font-size: clamp(0.68rem, calc((var(--board-size, 620px) - 40px) / 6 / 4.2), 1rem);
 }
 .sdk .btn:not(.btn-ghost)[aria-pressed="true"] { background: var(--green); border-color: var(--ink); color: var(--ink); }
 .sdk .btn.is-on { background: var(--green); border-color: var(--ink); color: var(--ink); }
@@ -307,6 +308,34 @@ body:has(.sdk[open]) { overflow: hidden; }
   border-top: 1px solid var(--line-strong); color: var(--muted);
   font-size: 0.86rem; letter-spacing: 0.04em; text-align: center;
 }
+.sdk-meta {
+  display: flex; align-items: center; justify-content: space-between; gap: var(--s2);
+  width: min(100%, var(--board-size, 620px)); margin-top: var(--s2);
+}
+.sdk-levels {
+  display: inline-flex; flex: 0 0 auto; border: 1px solid var(--line-strong); border-radius: 10px;
+  overflow: hidden; background: var(--surface);
+}
+.sdk-level {
+  appearance: none; border: 0; background: none; color: var(--ink); font: inherit;
+  font-size: 0.85rem; font-weight: 700; line-height: 1.2; white-space: nowrap;
+  padding: 6px 10px; cursor: pointer; touch-action: manipulation;
+}
+.sdk-level + .sdk-level { border-left: 1px solid var(--line-strong); }
+.sdk-level[aria-pressed="true"] { background: var(--green); }
+.sdk-level:focus-visible { outline: 2px solid var(--ink); outline-offset: -2px; }
+.sdk-stats {
+  display: flex; flex-direction: column; align-items: flex-end; min-width: 0;
+  font-size: 0.82rem; line-height: 1.3; color: var(--muted); text-align: right;
+  font-variant-numeric: tabular-nums; min-height: 2.6em; justify-content: center;
+}
+.sdk-stat-main { color: var(--ink); font-weight: 700; }
+.sdk-stat-main, .sdk-stat-best { white-space: nowrap; }
+.sdk-key-left {
+  position: absolute; top: 2px; right: 4px; font-size: 0.62rem; font-weight: 600; line-height: 1;
+  color: var(--muted); pointer-events: none;
+}
+.sdk-key.sdk-key-done { opacity: 0.38; }
 .sdk-pad { display: grid; grid-template-columns: repeat(var(--pad-cols), minmax(0, 1fr)); gap: var(--s1); }
 .sdk-key {
   position: relative; overflow: hidden;
@@ -375,6 +404,12 @@ body:has(.sdk[open]) { overflow: hidden; }
 @media (pointer: coarse) {
   .sdk .btn { min-height: 44px; }
 }
+/* Short windows (a 768-pixel-high laptop): a shorter banner leaves room for the board. */
+@media (min-width: 768px) and (max-height: 820px) {
+  .sdk-companion { height: 112px; }
+  .sdk-companion-character, .sdk-companion-blink { width: 104px; }
+  .sdk-companion-speech { inset: 8px 12px 28px 124px; }
+}
 
 /* ── Standalone page ── */
 .sdk { position: static; }
@@ -389,12 +424,15 @@ body:has(.sdk[open]) { overflow: hidden; }
 // footer five times. Every puzzle is generated here, so it plays offline once
 // the page is cached. Styles use the .sdk-* classes.
 //
-// The classic 9 × 9 with 3 × 3 boxes and digits only (Ivan, 2026-10-23: no
-// levels for now). The generator and board take any box shape, so bigger
-// grids or levels can come back by changing LEVEL. Wrapped in a function: the
+// The classic 9 × 9 with 3 × 3 boxes and digits only (Easy, Medium and Hard
+// differ only in how many clues stay; see DIFFICULTIES). The generator and
+// board take any box shape, so bigger grids can come back by changing LEVEL. Wrapped in a function: the
 // pages' own globals stay theirs.
 (() => {
   const LEVEL = { id: 'game', boxRows: 3, boxCols: 3, clues: 38 };
+  // Clues left on the board per difficulty: fewer clues is a harder puzzle.
+  const DIFFICULTIES = { easy: 45, medium: 38, hard: 30 };
+  const DEFAULT_DIFFICULTY = 'medium';
   const SYMBOLS = '123456789';
   const MIN_CELL_PX = 26;          // smaller is hard to read and to tap on a phone
   const MAX_CELL_PX = 56;
@@ -438,6 +476,16 @@ body:has(.sdk[open]) { overflow: hidden; }
       companionBox: 'quadrant {n}',
       companionAnd: ' and ',
       companionUnitPraise: 'Lovely work! {units} complete — you’re on a roll!',
+      level: 'Difficulty',
+      levelEasy: 'Easy',
+      levelMedium: 'Medium',
+      levelHard: 'Hard',
+      time: 'Time',
+      mistakes: 'Mistakes',
+      best: 'Best',
+      newBest: 'New best!',
+      digitLeft: '{n} left',
+      digitDone: 'all placed',
       language: 'Language',
       languageName: 'English',
     },
@@ -472,6 +520,16 @@ body:has(.sdk[open]) { overflow: hidden; }
       companionBox: '第 {n} 宫',
       companionAnd: '和',
       companionUnitPraise: '做得真棒！{units}都完成了，继续加油！',
+      level: '难度',
+      levelEasy: '简单',
+      levelMedium: '中等',
+      levelHard: '困难',
+      time: '用时',
+      mistakes: '错误',
+      best: '最佳',
+      newBest: '新纪录！',
+      digitLeft: '还剩 {n} 个',
+      digitDone: '已填满',
       language: '语言',
       languageName: '简体中文',
     },
@@ -498,6 +556,13 @@ body:has(.sdk[open]) { overflow: hidden; }
   let busy = false;
   let confirmTimer = 0;
   let eraseHoldFrame = 0;
+  let difficulty = ((d) => (d in DIFFICULTIES ? d : DEFAULT_DIFFICULTY))(storeGet('difficulty'));
+  let pendingDifficulty = null;  // picked mid-game: used if the player confirms Start over
+  let metaEls = null;
+  let runStart = 0;              // when the clock last started running; 0 means paused
+  let clockTimer = 0;
+  let justBest = false;
+  let finishedGame = null;
   let eraseHoldStart = 0;
   let eraseHoldBtn = null;
   let eraseHoldTriggered = false;
@@ -569,6 +634,7 @@ body:has(.sdk[open]) { overflow: hidden; }
     }
     const langLabel = dialog.querySelector('.lang-label');
     if (langLabel) langLabel.textContent = t('language');
+    renderMeta();
   }
 
   // ── Puzzle generation ──
@@ -675,12 +741,12 @@ body:has(.sdk[open]) { overflow: hidden; }
 
   // Take numbers out of a solved grid in random order, putting back any whose
   // removal would allow a second solution, until the level's clue count.
-  function makePuzzle(lv, g) {
+  function makePuzzle(lv, g, target = lv.clues) {
     const solution = solvedGrid(lv, g.n);
     const puzzle = [...solution];
     let clues = puzzle.length;
     for (const i of shuffled(range(puzzle.length))) {
-      if (clues <= lv.clues) break;
+      if (clues <= target) break;
       const v = puzzle[i];
       puzzle[i] = -1;
       if (countSolutions(puzzle, g) === 1) clues--;
@@ -713,10 +779,92 @@ body:has(.sdk[open]) { overflow: hidden; }
   }
 
   function saveGame() {
-    if (game) storeSet(level.id, JSON.stringify(game));
+    if (game) storeSet(level.id, JSON.stringify({ ...game, elapsed: elapsedMs() }));
   }
 
   // ── Game state ──
+
+  // ── Clock, difficulty and stats ──
+
+  function elapsedMs() {
+    return game ? game.elapsed + (runStart ? Date.now() - runStart : 0) : 0;
+  }
+
+  function pauseClock() {
+    if (runStart && game) game.elapsed += Date.now() - runStart;
+    runStart = 0;
+  }
+
+  function resumeClock() {
+    if (game && !isSolved() && !runStart && dialog && dialog.open && !document.hidden) runStart = Date.now();
+  }
+
+  function formatTime(ms) {
+    const total = Math.floor(ms / 1000);
+    const h = Math.floor(total / 3600);
+    const mm = String(Math.floor((total % 3600) / 60)).padStart(2, '0');
+    const ss = String(total % 60).padStart(2, '0');
+    return h ? `${h}:${mm}:${ss}` : `${mm}:${ss}`;
+  }
+
+  // Stop the clock and keep the time if it beats the best for this difficulty.
+  function finishGame() {
+    if (!game || finishedGame === game) return;
+    finishedGame = game;
+    pauseClock();
+    const key = `best_${game.difficulty}`;
+    const previous = Number(storeGet(key)) || 0;
+    justBest = game.elapsed > 0 && (!previous || game.elapsed < previous);
+    if (justBest) storeSet(key, String(game.elapsed));
+    renderMeta();
+  }
+
+  function renderMeta() {
+    if (!metaEls) return;
+    const shown = pendingDifficulty || (game && game.difficulty) || difficulty;
+    metaEls.group.setAttribute('aria-label', t('level'));
+    metaEls.levels.forEach((b) => {
+      const label = t(`level${b.dataset.level[0].toUpperCase()}${b.dataset.level.slice(1)}`);
+      if (b.textContent !== label) b.textContent = label;
+      b.setAttribute('aria-pressed', String(b.dataset.level === shown));
+    });
+    const own = game ? game.difficulty : difficulty;
+    const best = Number(storeGet(`best_${own}`)) || 0;
+    const main = game ? `${t('time')} ${formatTime(elapsedMs())} · ${t('mistakes')} ${game.mistakes}` : '';
+    const bestText = justBest && game && isSolved() ? t('newBest') : `${t('best')} ${best ? formatTime(best) : '—'}`;
+    if (metaEls.main.textContent !== main) metaEls.main.textContent = main;
+    if (metaEls.best.textContent !== bestText) metaEls.best.textContent = bestText;
+  }
+
+  function pickLevel(id) {
+    if (!(id in DIFFICULTIES) || busy || !game) return;
+    if (id === (pendingDifficulty || game.difficulty)) return;
+    pendingDifficulty = id;
+    renderMeta();
+    if (newBtn.dataset.confirm) {
+      // Already asking to start over: keep asking, now for the new level.
+      clearTimeout(confirmTimer);
+      confirmTimer = setTimeout(confirmExpired, CONFIRM_MS);
+      return;
+    }
+    askNewGame();   // starts at once if nothing would be lost, else asks for a second tap
+  }
+
+  // How many of each digit are still to place, shown on the number pad.
+  function updatePad() {
+    if (!pad || !game) return;
+    const counts = new Array(geo.n).fill(0);
+    game.values.forEach((v) => { if (v >= 0) counts[v] += 1; });
+    pad.querySelectorAll('.sdk-key').forEach((key) => {
+      const k = Number(key.dataset.sym);
+      const left = Math.max(0, geo.n - counts[k]);
+      key.classList.toggle('sdk-key-done', left === 0);
+      const badge = key.querySelector('.sdk-key-left');
+      const text = left ? String(left) : '';
+      if (badge && badge.textContent !== text) badge.textContent = text;
+      key.setAttribute('aria-label', `${SYMBOLS[k]}, ${left ? t('digitLeft', { n: left }) : t('digitDone')}`);
+    });
+  }
 
   function isSolved() {
     return game.values.every((v, i) => v === game.solution[i]);
@@ -771,6 +919,7 @@ body:has(.sdk[open]) { overflow: hidden; }
     saveGame();
     renderBoard();
     if (isSolved()) {
+      finishGame();
       storeRemove(level.id);
       setStatus(t('solved'), true, 'celebrating', { key: 'solved' });
     } else if (guideMode) {
@@ -801,6 +950,7 @@ body:has(.sdk[open]) { overflow: hidden; }
     const touched = placing ? [i, ...geo.peers[i].filter(j => game.notes[j] & bit)] : [i];
     if (!placing) animate(cells[i], 'sdk-pop');
     history.push(snapshot(touched));
+    if (placing && symbol !== game.solution[i]) game.mistakes += 1;
     game.values[i] = placing ? symbol : -1;
     game.notes[i] = 0;
     if (placing) touched.slice(1).forEach(j => { game.notes[j] &= ~bit; });
@@ -1106,6 +1256,7 @@ body:has(.sdk[open]) { overflow: hidden; }
       .filter(i => i >= 0));
     renderBoard();
     if (isSolved()) {
+      finishGame();
       setStatus(t('solved'), true, 'celebrating', { key: 'solved' });
       return;
     }
@@ -1135,12 +1286,19 @@ body:has(.sdk[open]) { overflow: hidden; }
   function newGame() {
     if (busy) return;
     busy = true;
+    const chosen = pendingDifficulty || (game && game.difficulty) || difficulty;
     resetConfirm();
     setStatus(t('makingPuzzle'), false, 'idle', { key: 'makingPuzzle' });
     // Let the message paint first: proving the puzzle unique takes a moment.
     setTimeout(() => {
       try {
-        const fresh = makePuzzle(level, geo);
+        const fresh = makePuzzle(level, geo, DIFFICULTIES[chosen]);
+        fresh.difficulty = chosen;
+        fresh.elapsed = 0;
+        fresh.mistakes = 0;
+        difficulty = chosen;
+        pendingDifficulty = null;
+        storeSet('difficulty', chosen);
         showGame(fresh);
         saveGame();
         rippleIn();
@@ -1153,6 +1311,13 @@ body:has(.sdk[open]) { overflow: hidden; }
 
   function showGame(g) {
     game = g;
+    game.difficulty = game.difficulty in DIFFICULTIES ? game.difficulty : DEFAULT_DIFFICULTY;
+    game.elapsed = Number(game.elapsed) || 0;
+    game.mistakes = Number(game.mistakes) || 0;
+    pendingDifficulty = null;
+    runStart = 0;
+    justBest = false;
+    finishedGame = null;
     hintVisual = null;
     history = [];
     wrong.clear();
@@ -1160,6 +1325,8 @@ body:has(.sdk[open]) { overflow: hidden; }
     buildBoard();
     sizeBoard();
     renderBoard();
+    sizeBoard();   // the stats text just appeared: settle the size again
+    resumeClock();
     cells[selected].focus();
     setStatus(isSolved() ? t('solved') : '', isSolved(), isSolved() ? 'celebrating' : 'idle',
       isSolved() ? { key: 'solved' } : null);
@@ -1191,7 +1358,13 @@ body:has(.sdk[open]) { overflow: hidden; }
       b.type = 'button';
       b.className = 'btn sdk-key';
       b.dataset.sym = k;
-      b.textContent = SYMBOLS[k];
+      const sym = document.createElement('span');
+      sym.className = 'sdk-key-sym';
+      sym.textContent = SYMBOLS[k];
+      const left = document.createElement('span');
+      left.className = 'sdk-key-left';
+      left.setAttribute('aria-hidden', 'true');
+      b.append(sym, left);
       return b;
     }));
   }
@@ -1204,33 +1377,64 @@ body:has(.sdk[open]) { overflow: hidden; }
     const dialogStyle = getComputedStyle(dialog);
     const play = dialog.querySelector('.sdk-play');
     const companion = dialog.querySelector('.sdk-companion');
-    const status = dialog.querySelector('.sdk-status');
     const footer = dialog.querySelector('.sdk-footer');
     const tools = dialog.querySelector('.sdk-tools');
     const header = dialog.querySelector('.sdk-head');
-    const gap = parseFloat(dialogStyle.gap || '0');
-    const otherHeight = [header, companion, status, pad, tools, footer]
-      .filter(Boolean)
-      .reduce((sum, el) => sum + el.offsetHeight, 0) + gap * 5;
-    const availableWidth = contentWidth();
-    const availableHeight = Math.max(
-      MIN_CELL_PX * geo.n,
-      window.innerHeight - DIALOG_MARGIN_PX
-      - parseFloat(dialogStyle.paddingTop) - parseFloat(dialogStyle.paddingBottom)
-      - otherHeight
-    );
-    const cell = Math.max(MIN_CELL_PX, Math.floor(Math.min(availableWidth / geo.n, availableHeight / geo.n, MAX_CELL_PX)));
-    const boardSize = cell * geo.n + BOARD_BORDER_PX * 2;
-    const nextValue = `${cell}px`;
-    if (board.style.getPropertyValue('--cell') === nextValue && board.style.width === `${boardSize}px`) return;
-    board.style.setProperty('--cell', nextValue);
-    board.style.width = `${boardSize}px`;
-    board.style.height = `${boardSize}px`;
-    board.style.setProperty('--board-size', `${boardSize}px`);
-    pad.style.width = `${boardSize}px`;
-    if (tools) tools.style.width = `${boardSize}px`;
-    if (header) header.style.width = `${boardSize}px`;
-    if (companion) companion.style.width = `${boardSize}px`;
+    const meta = dialog.querySelector('.sdk-meta');
+    const gap = parseFloat(dialogStyle.rowGap) || parseFloat(dialogStyle.gap) || 0;
+    // Everything that takes room around the board: the header, each row of the play
+    // area that is in the layout flow, and the gaps between them.
+    const boardStyle = getComputedStyle(board);
+    const measureOthers = () => {
+      const rows = [...play.children].filter(el => el !== board && getComputedStyle(el).position !== 'absolute');
+      const playStyle = getComputedStyle(play);
+      const playGap = parseFloat(playStyle.rowGap) || parseFloat(playStyle.gap) || 0;
+      return (header ? header.offsetHeight + gap : 0)
+        + rows.reduce((sum, el) => {
+            const rowStyle = getComputedStyle(el);
+            // The footer's top margin is auto on a phone (it just takes the spare room), so skip it.
+            if (el === footer) return sum + el.offsetHeight;
+            return sum + el.offsetHeight + (parseFloat(rowStyle.marginTop) || 0) + (parseFloat(rowStyle.marginBottom) || 0);
+          }, 0)
+        + playGap * rows.length
+        + (parseFloat(boardStyle.marginTop) || 0) + (parseFloat(boardStyle.marginBottom) || 0);
+    };
+    // Sizing the board changes the width of the rows around it (a narrower button
+    // row may wrap), so measure again and settle on the size that really fits.
+    let boardSize = 0;
+    let cell = 0;
+    const apply = (c) => {
+      cell = c;
+      boardSize = cell * geo.n + BOARD_BORDER_PX * 2;
+      board.style.setProperty('--cell', `${cell}px`);
+      board.style.width = `${boardSize}px`;
+      board.style.height = `${boardSize}px`;
+      board.style.setProperty('--board-size', `${boardSize}px`);
+      dialog.style.setProperty('--board-size', `${boardSize}px`);
+      pad.style.width = `${boardSize}px`;
+      if (tools) tools.style.width = `${boardSize}px`;
+      if (header) header.style.width = `${boardSize}px`;
+      if (meta) meta.style.width = `${boardSize}px`;
+      if (companion) companion.style.width = `${boardSize}px`;
+    };
+    for (let pass = 0; pass < 4; pass++) {
+      const availableWidth = contentWidth();
+      const availableHeight = Math.max(
+        MIN_CELL_PX * geo.n,
+        window.innerHeight - DIALOG_MARGIN_PX
+        - parseFloat(dialogStyle.paddingTop) - parseFloat(dialogStyle.paddingBottom)
+        - measureOthers()
+      );
+      const nextCell = Math.max(MIN_CELL_PX, Math.floor(Math.min(availableWidth / geo.n, availableHeight / geo.n, MAX_CELL_PX)));
+      const settled = nextCell === cell;
+      apply(nextCell);
+      if (settled) break;
+    }
+    // Last check against what the browser really laid out: step down until the
+    // dialog stops scrolling, unless the board is already at its smallest.
+    for (let k = 0; k < 6 && cell > MIN_CELL_PX && dialog.scrollHeight > dialog.clientHeight + 1; k++) {
+      apply(cell - 1);
+    }
   }
 
   function renderBoard() {
@@ -1266,6 +1470,8 @@ body:has(.sdk[open]) { overflow: hidden; }
       el.setAttribute('aria-label', `Row ${row[i] + 1}, column ${col[i] + 1}: ${content}${given ? ', given' : ''}`);
     });
     if (selected >= 0) pulseSelectedCell();
+    updatePad();
+    renderMeta();
   }
 
   // A cell's number, or its notes laid out like a small box, or nothing.
@@ -1615,7 +1821,16 @@ body:has(.sdk[open]) { overflow: hidden; }
     if (!hasProgress() || newBtn.dataset.confirm) return newGame();
     newBtn.dataset.confirm = '1';
     newBtn.textContent = t('startOver');
-    confirmTimer = setTimeout(resetConfirm, CONFIRM_MS);
+    confirmTimer = setTimeout(confirmExpired, CONFIRM_MS);
+  }
+
+  // The player did not confirm: forget a level picked for the new game.
+  function confirmExpired() {
+    resetConfirm();
+    if (pendingDifficulty) {
+      pendingDifficulty = null;
+      renderMeta();
+    }
   }
 
   // ── Events ──
@@ -1682,6 +1897,7 @@ body:has(.sdk[open]) { overflow: hidden; }
       pulsePadKey(t);
       return enter(Number(t.dataset.sym));
     }
+    if (t.dataset.level) return pickLevel(t.dataset.level);
     if (!game) return;
     if (t.dataset.cell !== undefined) return select(Number(t.dataset.cell), true);
     const actions = {
@@ -1791,6 +2007,17 @@ body:has(.sdk[open]) { overflow: hidden; }
           </svg>
           <p class="sdk-companion-speech" aria-hidden="true">${t('companionIdle')}</p>
         </section>
+        <div class="sdk-meta">
+          <div class="sdk-levels" role="group" aria-label="${t('level')}">
+            <button type="button" class="sdk-level" data-level="easy">${t('levelEasy')}</button>
+            <button type="button" class="sdk-level" data-level="medium">${t('levelMedium')}</button>
+            <button type="button" class="sdk-level" data-level="hard">${t('levelHard')}</button>
+          </div>
+          <div class="sdk-stats">
+            <span class="sdk-stat-main"></span>
+            <span class="sdk-stat-best"></span>
+          </div>
+        </div>
         <div class="sdk-board" role="group"></div>
         <p class="sdk-status visually-hidden" role="status"></p>
         <div class="sdk-pad" role="group" aria-label="Numbers"></div>
@@ -1836,6 +2063,12 @@ body:has(.sdk[open]) { overflow: hidden; }
       if (document.fonts && document.fonts.ready) document.fonts.ready.then(fitSpeech);
     }
     pad = dialog.querySelector('.sdk-pad');
+    metaEls = {
+      group: dialog.querySelector('.sdk-levels'),
+      levels: [...dialog.querySelectorAll('.sdk-level')],
+      main: dialog.querySelector('.sdk-stat-main'),
+      best: dialog.querySelector('.sdk-stat-best'),
+    };
     statusEl = dialog.querySelector('.sdk-status');
     notesBtn = dialog.querySelector('[data-act="notes"]');
     newBtn = dialog.querySelector('[data-act="new"]');
@@ -1857,7 +2090,17 @@ body:has(.sdk[open]) { overflow: hidden; }
     board.addEventListener('keydown', onBoardKey);
     pad.addEventListener('pointerover', onNumberPadPointer);
     pad.addEventListener('pointerout', onNumberPadPointer);
-    dialog.addEventListener('close', () => window.removeEventListener('resize', sizeBoard));
+    dialog.addEventListener('close', () => {
+      window.removeEventListener('resize', sizeBoard);
+      pauseClock();
+      saveGame();
+    });
+    clockTimer = setInterval(renderMeta, 1000);
+    if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => sizeBoard());
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) { pauseClock(); saveGame(); } else resumeClock();
+    });
+    window.addEventListener('pagehide', () => { pauseClock(); saveGame(); });
   }
 
   function openSudoku() {
@@ -1869,6 +2112,7 @@ body:has(.sdk[open]) { overflow: hidden; }
     if (soundOn) startAmbientLoop();
     if (!game) return start();
     sizeBoard();
+    resumeClock();
     cells[selected]?.focus();
   }
 
