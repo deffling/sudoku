@@ -3,10 +3,11 @@
   "name": "Sudoku",
   "short_name": "Sudoku",
   "description": "A simple Sudoku game that works offline.",
+  "lang": "en",
+  "categories": ["games"],
   "start_url": "./sudoku.html",
   "scope": "./",
   "display": "standalone",
-  "orientation": "portrait",
   "background_color": "#f4ead2",
   "theme_color": "#f4ead2",
   "icons": [
@@ -20,7 +21,13 @@
       "src": "./icons/icon-512.png",
       "sizes": "512x512",
       "type": "image/png",
-      "purpose": "any maskable"
+      "purpose": "any"
+    },
+    {
+      "src": "./icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
     }
   ]
 }

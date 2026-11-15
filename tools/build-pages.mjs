@@ -11,13 +11,17 @@ if (output === root || !/^(local|[0-9a-f]{7,40})$/i.test(buildId)) {
 }
 
 await mkdir(output, { recursive: true });
-for (const file of ['index.html', 'manifest.webmanifest']) {
+
+// Copied as they are.
+for (const file of ['index.html', 'manifest.webmanifest', 'sudoku.html', 'sudoku.css', 'logic.js']) {
   await cp(path.join(root, file), path.join(output, file));
 }
-await cp(path.join(root, 'icons'), path.join(output, 'icons'), { recursive: true });
-await cp(path.join(root, 'assets'), path.join(output, 'assets'), { recursive: true });
+for (const dir of ['icons', 'assets', 'vendor']) {
+  await cp(path.join(root, dir), path.join(output, dir), { recursive: true });
+}
 
-for (const file of ['sudoku.html', 'sw.js']) {
+// Stamped with the build id: the footer shows it and the service worker versions its cache with it.
+for (const file of ['sudoku.js', 'sw.js']) {
   const source = await readFile(path.join(root, file), 'utf8');
   const stamped = source.replaceAll('@@BUILD_ID@@', buildId);
   if (stamped === source || stamped.includes('@@BUILD_ID@@')) {
